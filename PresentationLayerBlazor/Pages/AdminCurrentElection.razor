@@ -1,0 +1,86 @@
+﻿@page "/AdminCurrentElection/{idElection:int}"
+@using BusinessLayer;
+@using ServiceLayer;
+<AuthorizeView Roles="Admin">
+    <Authorized>
+
+@if (election != null)
+{
+    if (election.DateFrom.CompareTo(DateTime.Now) <= 0 && election.Dateto.CompareTo(DateTime.Now) >= 0)
+    {
+        <h2 style="text-align:center;  background-color: rgba(255, 255, 255, 0.5); padding: 10px;   color: black;">@election.Question.Text </h2>
+        <table width="100%" cellpadding="5" style="background-color: white;  align-items: center; text-align:center">
+            @if (election.Type == 4)
+            {
+                <tr>
+                    <td width="33%"><h4>Отговор: @election.Question.Answers[0].Text</h4></td>
+                    <td width="34%"><h4>Отговор: @election.Question.Answers[1].Text</h4></td>
+                    <td width="33%"><h4>Отговор: @election.Question.Answers[2].Text</h4></td>
+                </tr>
+            }
+            else
+            {
+                @foreach (var item in partiesTakingPlace)
+                {
+                    List<Answer> selAnswers = new List<Answer>();
+                    selAnswers = answers.Where(a => a.PartyName == item).ToList();
+                    if (selAnswers != null && selAnswers.Count != 0)
+                    {
+                        <tr><td colspan="3"><h2>@selAnswers[0].PartyName</h2></td></tr>
+                        for (int i = 0; i < selAnswers.Count(); i += 3)
+                        {
+                            <tr>
+                                <td width="33%"><h4>Кандидат: @selAnswers[i].Text</h4></td>
+
+                                @if (@selAnswers.Count > i + 1)
+                                {
+                                    <td width="33%"><h4>Кандидат: @selAnswers[i+1].Text</h4></td>
+
+                                }
+                                @if (@selAnswers.Count > i + 2)
+                                {
+                                  <td width="33%">   <h4>Кандидат: @selAnswers[i + 2].Text</h4> </td>
+
+                                }
+                            </tr>
+                        }
+                    }
+
+                }
+            }
+        </table>
+    }
+}
+
+    </Authorized>
+</AuthorizeView>
+
+@code {
+    string errMess = string.Empty;
+
+    [Parameter]
+    public int idElection { get; set; }
+    Election election;
+    ElectionManager em = new ElectionManager(DBContextManager.CreateContext());
+    List<Answer> answers = new List<Answer>();
+    List<string> partiesTakingPlace = new List<string>();
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+ election = await em.ReadAsync(idElection, true);
+        if (election.Type != 4)
+        {
+            answers = election.Question.Answers;
+            answers = answers.OrderBy(a => a.PartyName).ThenBy(a => a.CandidateID).ToList();
+            partiesTakingPlace = (answers.Select(a => a.PartyName).ToList()).Distinct().ToList();
+        }
+
+        }
+        catch (Exception ex)
+        {
+            errMess = ex.Message;
+        }
+       
+    }
+}

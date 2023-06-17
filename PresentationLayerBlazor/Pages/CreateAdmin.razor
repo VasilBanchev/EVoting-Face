@@ -1,0 +1,80 @@
+﻿@page "/CreateAdmin"
+@using BlazorServer.Pages;
+@using BlazorServer.Services;
+@using BusinessLayer;
+@using ServiceLayer;
+@inject IdentityManager identityManager;
+@inject IJSRuntime JsRuntime;
+
+<AuthorizeView Roles="Admin">
+    <Authorized>
+<h3 style="background-color:white">Управление на администратори</h3>
+<input type="text" @bind-value="username" placeholder="Име за влизане"/>
+<input type="password" @bind-value="password" placeholder="Рарола"/>
+<button @onclick="Create">Създай</button>
+<br />
+<br />
+<label style="background-color:white; margin:5px" >Въведи ID за да изтриеш администратор:</label><input type="text" maxlength="36" @bind-value="searchedId" placeholder="ID"/> <button @onclick="Delete"> Изтрий</button>
+<label id="error" class="col-md-4 text-danger">@errMess</label>
+
+    </Authorized>
+</AuthorizeView>
+
+@code {
+    string username = string.Empty;
+    string password = string.Empty;
+    string id;
+    string searchedId = string.Empty;
+    string errMess = string.Empty;
+    private async Task Create()
+    {
+        try
+        {
+ if (username.Length <5 || password.Length<5)
+        {
+            await JsRuntime.InvokeVoidAsync("alert", $"Дължината на името или паролата трябва да е поне 5 символа!");
+        }else
+        {
+            await identityManager.SeedDataAsync(password, username);
+            id = (await identityManager.ReadUserEGNAsync(username)).Id;
+            await JsRuntime.InvokeVoidAsync("alert", $"Създаден е администратор с {id}");
+
+            username = string.Empty;
+            password = string.Empty;
+        }
+
+        }
+        catch (Exception ex)
+        {
+            errMess = ex.Message;
+        }
+
+       
+
+
+    }
+
+    private async Task Delete()
+    {
+        try
+        {
+            if (searchedId.Length == 36)
+            {
+                await identityManager.DeleteUserAsync(searchedId);
+                await JsRuntime.InvokeVoidAsync("alert", "Успешно изтрит е администратор");
+
+                searchedId = string.Empty;
+                errMess = string.Empty;
+            }
+            else
+            {
+                errMess = "Дължината на ID трябва да е 36 символа";
+            }
+        }
+        catch (Exception ex)
+        {
+            errMess = ex.Message;
+        }
+        
+    }
+}

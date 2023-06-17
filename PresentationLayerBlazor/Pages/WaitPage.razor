@@ -1,0 +1,68 @@
+﻿@page "/WaitPage/{userID}"
+@using BusinessLayer;
+@using ServiceLayer;
+@inject IdentityManager identityMnaager;
+@inject NavigationManager navManager;
+@inject IJSRuntime JsRuntime;
+
+
+<AuthorizeView Roles="Admin, User">
+    <Authorized>
+        Вече сте влезнали в акаунта си
+    </Authorized>
+    <NotAuthorized>
+        @if (curruser != null)
+        {
+            @if (curruser.BlackList == false)
+            {
+                <h3 style="text-align:center;  background-color: rgba(255, 255, 255, 0.6); padding: 10px;   color: black;">Страница за изчакване</h3>
+        <h4 style="text-align:center;  background-color: rgba(255, 255, 255, 0.6); padding: 10px">Трябва да изчаакате докато акаунта бъде потвърден! Обикновено отнема около 24часа!</h4>
+            }else
+            {
+                <div style="text-align:center;  background-color: rgba(255, 255, 255, 0.6); padding: 10px;   color: black;">
+                     <h3 >Допусната е грешка при регистрация! Акаунтът е блокиран от администратор. Изтрийте профила си и се регистритайте отново.</h3>
+                <center> <button @onclick="Delete" class="outline red" >Изтрий акаунт</button></center>
+                </div>
+
+                <h3 style="color:red; text-align:center;  background-color: rgba(255, 255, 255, 0.7); padding: 10px;   color: black;">@errMess</h3>
+            }
+        }
+       
+       
+    </NotAuthorized>
+</AuthorizeView>
+@code {
+    string errMess = string.Empty;
+
+    [Parameter]
+    public string userID { get; set; }
+    User curruser;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            curruser = await identityMnaager.ReadUserAsync(userID, true, true);
+        }
+        catch (Exception ex)
+        {
+            errMess = ex.Message;
+        }
+    }
+    private async Task Delete()
+    {
+        try
+        {
+            bool confirmed = await JsRuntime.InvokeAsync<bool>("confirm", "Сигурни ли сте. че искате да изтриете акаунта си?");
+            if (confirmed)
+            {
+                await identityMnaager.DeleteUserAsync(userID);
+                navManager.NavigateTo("/");
+            }
+        }
+        catch (Exception ex)
+        {
+            errMess = ex.Message;
+        }    
+    }
+}

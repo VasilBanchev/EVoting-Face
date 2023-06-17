@@ -1,0 +1,199 @@
+﻿@using SixLabors.ImageSharp;
+@using System.Net.Mime;
+@using SixLabors.ImageSharp.Formats.Jpeg;
+@using SixLabors.ImageSharp.PixelFormats;
+@using static System.Net.Mime.MediaTypeNames;
+@using static SixLabors.ImageSharp.Configuration;
+@using ServiceLayer;
+@using BusinessLayer
+@inject IdentityManager identityManager;
+@inject IJSRuntime JSRuntime;
+@page "/VerifyUsers"
+
+
+<AuthorizeView Roles="Admin">
+
+
+    <table style="background-color: white; text-align:center" width="100%">
+        <tr><td colspan="13"><h2>Потвърди потребители</h2></td></tr>
+
+        <tr>
+            <td> ЕГН </td>
+            <td> Номер на ЛК </td>
+            <td> Име </td>
+            <td> Презиме </td>
+            <td> Фамилия </td>
+            <td> Дата на изтичани </td>
+            <td> Дата на издаване </td>
+            <td> Пол </td>
+            <td> Рождена дата </td>
+            <td> Родно място </td>
+            <td> Местожителство </td>
+
+            <td>
+                <label> Виж снимки </label>
+            </td>
+            <td><label> Потвърждаване</label></td>
+        </tr>
+        @if (waitingUsers.Count == 0)
+        {
+            <tr><td colspan="13"><h2>Няма чакащи потребители</h2></td></tr>
+        }
+        @foreach (var u in waitingUsers)
+        {
+            <tr>
+                <td>@u.FK_IDCard.EGN</td>
+                <td>@u.FK_IDCard.IDCardNumber</td>
+                <td>@u.FK_IDCard.Name</td>
+                <td>@u.FK_IDCard.MidName</td>
+                <td>@u.FK_IDCard.LastName</td>
+                <td>@u.FK_IDCard.DateOfExpiry.ToShortDateString()</td>
+                <td>@u.FK_IDCard.DateOfIssue.ToShortDateString()</td>
+                <td>@u.FK_IDCard.Gender</td>
+                <td>@u.FK_IDCard.DateOfBirth.ToShortDateString()</td>
+                <td>@u.FK_IDCard.BornPlace</td>
+                <td>@u.FK_IDCard.RegionText</td>
+
+                <td>
+                    @if (u.FK_IDCard.CardPhotos.IDCardImage1 != null && u.FK_IDCard.CardPhotos.IDCardImage1 != null)
+                    {
+                       <button style="margin:3px" type="button" id="@u.Id" @onclick="@(() => ViewProfileImage(u.Id))">Входяща</button>
+                      <br /> <button style="margin:3px" type="button" id="@u.Id" @onclick="@(() => ViewFrontImage(u.Id))">Лице</button>
+                       <button style="margin:3px" type="button" id="@u.Id" @onclick="@(() => ViewBackImage(u.Id))">Гръб</button>
+                    }
+                </td>
+                <td>
+                    @if (u.Authenticated == false && u.BlackList == false)
+                    {
+                        <button class="outline green" style="margin:3px" type="button" id="@u.Id" @onclick="@(() => AcceptAuth(u.Id))">Потвърди</button>
+                        <button class="outline red" style="margin:3px" type="button" id="@u.Id" @onclick="@(() => RejectAuth(u.Id))">Откажи достъп</button>
+                    }
+                    @if (u.Authenticated)
+                    {
+
+                        <p>Потвърден</p>
+
+                    }
+                    @if (u.BlackList)
+                    {
+                        <p>Отказан достъп</p>
+                    }
+                </td>
+            </tr>
+        }
+
+
+
+
+
+    </table>
+</AuthorizeView>
+
+<label id="error" class="col-md-4 text-danger">@errMess</label>
+@code {
+    string errMess = string.Empty;
+    List<User> waitingUsers = new List<User>();
+    protected override async Task OnInitializedAsync()
+    {
+        waitingUsers = (await identityManager.ReadAllUsersAsync(true, true)).Where(u => u.Authenticated == false && u.BlackList == false).Take(25).ToList();
+
+        // return base.OnInitializedAsync();
+    }
+    private async Task ViewProfileImage(string userID)
+    {
+        try
+        {
+            User userdb = await identityManager.ReadUserAsync(userID, true, true);
+            if (userdb.FK_IDCard.CardPhotos.IDCardImage1 != null)
+            {
+                string imageDataURL = $"data:image/jpeg;base64,{Convert.ToBase64String(userdb.FK_IDCard.CardPhotos.PersonPhoto)}";
+                await JSRuntime.InvokeVoidAsync("displayImage", imageDataURL);
+            }
+
+        }
+        catch (Exception ex)
+        {
+            errMess = ex.Message;
+        }
+
+
+    }
+    private async Task ViewFrontImage(string userID)
+    {
+        try
+        {
+            User userdb = await identityManager.ReadUserAsync(userID, true, true);
+            if (userdb.FK_IDCard.CardPhotos.IDCardImage1 != null)
+            {
+                string imageDataURL = $"data:image/jpeg;base64,{Convert.ToBase64String(userdb.FK_IDCard.CardPhotos.IDCardImage1)}";
+                await JSRuntime.InvokeVoidAsync("displayImage", imageDataURL);
+            }
+
+        }
+        catch (Exception ex)
+        {
+            errMess = ex.Message;
+        }
+
+
+    }
+
+    private async Task ViewBackImage(string userID)
+    {
+        try
+        {
+            User userdb = await identityManager.ReadUserAsync(userID, true, true);
+            if (userdb.FK_IDCard.CardPhotos.IDCardImage1 != null)
+            {
+                string imageDataURL = $"data:image/jpeg;base64,{Convert.ToBase64String(userdb.FK_IDCard.CardPhotos.IDCardImage2)}";
+                await JSRuntime.InvokeVoidAsync("displayImage", imageDataURL);
+            }
+
+        }
+        catch (Exception ex)
+        {
+            errMess = ex.Message;
+        }
+
+
+    }
+
+    private async Task AcceptAuth(string id)
+    {
+        try
+        {
+
+            User u = await identityManager.ReadUserAsync(id, true);
+            u.Authenticated = true;
+            await identityManager.UpdateUserAsync(u);
+            waitingUsers.Remove(u);
+            IDCardPhotosManager idcm = new IDCardPhotosManager(DBContextManager.CreateContext());
+            idcm.DeletePhotoesAsync(u.FK_IDCard.EGN);
+        }
+        catch (Exception ex)
+        {
+            errMess = ex.Message;
+        }
+
+
+    }
+    private async Task RejectAuth(string id)
+    {
+        try
+        {
+            User u = await identityManager.ReadUserAsync(id,true);
+            u.BlackList = true;
+            await identityManager.UpdateUserAsync(u);
+            waitingUsers.Remove(u);
+            IDCardPhotosManager idcm = new IDCardPhotosManager(DBContextManager.CreateContext());
+            idcm.DeletePhotoesAsync(u.FK_IDCard.EGN);
+        }
+        catch (Exception ex)
+        {
+            errMess = ex.Message;
+        }
+
+
+    }
+
+}

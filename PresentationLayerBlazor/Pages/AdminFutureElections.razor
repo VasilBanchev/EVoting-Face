@@ -1,0 +1,130 @@
+﻿@using BusinessLayer;
+@using ServiceLayer;
+@inject NavigationManager navManager;
+@inject IJSRuntime JsRuntime;
+
+@page "/AdminFutureElections"
+
+<AuthorizeView Roles="Admin">
+    <Authorized>
+<h3 style="text-align:center;  background-color: rgba(255, 255, 255, 0.5); padding: 10px;   color: black;">
+    Предстоящи избори
+</h3>
+<table width="100%" style="background-color: white;" cellpadding="5">
+    @if (futureElections.Count != 0)
+    {
+        <tr>
+            <td>Тип:</td>
+            <td>Начало:</td>
+            <td>Край:</td>
+            <td></td>
+            <td></td>
+
+        </tr>
+        @if (futureElections.Count != 0)
+        {
+            foreach (var item in futureElections)
+            {
+                <tr>
+                    <td>@TypeToString(item.Type)</td>
+                    <td>@item.DateFrom</td>
+                    <td>@item.Dateto</td>
+                    <td><button class="outline" @onclick="() => ViewFutureElections(item.ID)" id="@item.ID">Виж повече</button></td>
+                    <td><button class="outline green" @onclick="() => EditFutureElections(item.ID)" id="@item.ID">Промени</button></td>
+                    <td><button class="outline red" @onclick="() => DeleteFutureElections(item.ID)" id="@item.ID">Изтрий</button></td>
+                </tr>
+            }
+        }
+
+    }
+</table>
+
+</Authorized>
+</AuthorizeView>
+
+<label id="error" class="col-md-4 text-danger">@errMess</label>
+@code {
+    string errMess = string.Empty;
+    ElectionManager em = new ElectionManager(DBContextManager.CreateContext());
+    List<Election> futureElections = new List<Election>();
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+
+            futureElections = (await em.ReadAllAsync(true)).Where(e => e.DateFrom.CompareTo(DateTime.Now) >= 0).ToList();
+
+        }
+        catch (Exception ex)
+        {
+            errMess = ex.Message;
+        }
+
+    }
+
+    private string TypeToString(int type)
+    {
+        try
+        {
+
+
+            string[] types = { "Президентски", "Парламентарни", "Местни", "Референдум" };
+            return types[type - 1];
+        }
+        catch (Exception ex)
+        {
+            errMess = ex.Message;
+            return "error";
+        }
+
+    }
+    private async Task ViewFutureElections(int electionID)
+    {
+        try
+        {
+
+        navManager.NavigateTo($"/FutureElections/{electionID}");
+
+        }
+        catch (Exception ex)
+        {
+            errMess = ex.Message;
+        }
+
+
+    }
+    private async Task EditFutureElections(int electionID)
+    {
+        try
+        {
+        navManager.NavigateTo($"/EditFutureElection/{electionID}");
+
+
+        }
+        catch (Exception ex)
+        {
+            errMess = ex.Message;
+        }
+
+    }
+    private async Task DeleteFutureElections(int electionID)
+    {
+        try
+        {
+bool confirmed = await JsRuntime.InvokeAsync<bool>("confirm", "Сигурни ли сте че искате да изтриете изборите?");
+        if (confirmed)
+        {
+            await em.DeleteAsync(electionID);
+            futureElections.RemoveAll(e => e.ID == electionID);
+        }
+
+        }
+        catch (Exception ex)
+        {
+            errMess = ex.Message;
+        }
+
+        
+    }
+}

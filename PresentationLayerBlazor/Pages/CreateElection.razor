@@ -1,0 +1,572 @@
+﻿@page "/CreateElection"
+@using BusinessLayer;
+@using ServiceLayer;
+@inject NavigationManager navManager;
+
+
+<AuthorizeView Roles="Admin">
+    <Authorized>
+
+        <table width="100%" style="background-color: white; text-align:center" cellpadding="5" hidden="@firstTableHidden">
+            <tr>
+                <td colspan="4"><center><h3>Създай избори</h3></center></td>
+            </tr>
+            <tr>
+                <td colspan="4">
+                    <label>Изберете тип избори:</label>
+                    <br />
+                </td>
+
+            </tr>
+            <tr>
+                <td>
+                    <label>Президентски </label>
+                    <input type="radio" value="1" name="typeElection" @oninput="RadioOptChanged" checked />
+                </td>
+                <td>
+                    <label>Парламентарни </label>
+                    <input type="radio" value="2" name="typeElection" @oninput="RadioOptChanged" />
+                </td>
+                <td>
+                    <label>Местни </label>
+                    <input type="radio" value="3" name="typeElection" @oninput="RadioOptChanged" />
+                </td>
+
+                <td>
+                    <label>Референдум </label>
+                    <input type="radio" value="4" name="typeElection" @oninput="RadioOptChanged" />
+
+                </td>
+
+            </tr>
+            <tr>
+
+                <td colspan="4"><p><br /></p></td>
+            </tr>
+
+
+            <tr hidden="@(!refHid)">
+                <td colspan="2"><center> <h4>Всички партии</h4></center></td>
+                <td colspan="2"><center><h4>Избрани партии</h4></center></td>
+            </tr>
+
+            <tr height="250px" hidden="@(!refHid)">
+                <td colspan="2">
+                    <div style="height: 250px; overflow-y: auto;display: flex; align-items: center; justify-content: center; ">
+                        <table>
+
+                            @if (allParties != null)
+                            {
+                                @foreach (var p in allParties)
+                                {
+                                    <tr><td>@p.Name</td> <td><button type="button" value="@p.ID" @onclick="(() => AddParty(p.ID))">Добави</button> </td> </tr>
+                                }
+                            }
+
+
+                        </table>
+                    </div>
+                </td>
+
+                <td colspan="2">
+                    <div style="height: 250px; overflow-y: auto; display: flex; align-items: center; justify-content: center;">
+                        <table>
+
+                            @if (selectedParties != null)
+                            {
+                                @foreach (var p in selectedParties)
+                                {
+                                    <tr><td> @p.Name</td><td> <button type="button" value="@p.ID" @onclick="(() => RemoveParty(p.ID))">Премахни</button> </td> </tr>
+                                }
+                            }
+
+
+                        </table>
+                    </div>
+                </td>
+            </tr>
+
+            <tr>
+
+                <td colspan="4"><p><br /></p></td>
+            </tr>
+
+            <tr>
+                <td colspan="4" hidden="@(!refHid)"><label>Тема на изборите:</label>   <input size="50" @bind-value="theme" placeholder=" Тема на изборите" /> </td>
+                <td colspan="4" hidden="@refHid"><label>Тема на изборите:</label>   <input size="50" @bind-value="theme" placeholder=" Тема на референдума" /> </td>
+            </tr>
+            <tr hidden="@refHid">
+                <td><label>Отговор 1:</label><input @bind-value="refAnsw[0]" /> </td>
+                <td><label>Отговор 2:</label><input @bind-value="refAnsw[1]" /></td>
+                <td><label>Отговор 3:</label><input @bind-value="refAnsw[2]" /></td>
+            </tr>
+            <tr>
+
+                <td colspan="4"><p><br /></p></td>
+            </tr>
+            <tr>
+                <td colspan="2"><label>От дата:</label><input type="datetime-local" @bind-value="fromD" /></td>
+                <td colspan="2"><label>До дата:</label><input type="datetime-local" @bind-value="toD" /></td>
+            </tr>
+            <tr>
+                <td colspan="4"> <h3 style="color:red; text-align:center">@errMess</h3> </td>
+
+            </tr>
+            <tr>
+                <td colspan="4">
+                    <center>
+                        <button type="button" class="outline" @onclick="NextForm" hidden="@(!refHid)">Напред</button>
+                        <button type="button" class="outline" @onclick="CreateRef" hidden="@refHid">Създай</button>
+
+                    </center>
+                    <br />
+                </td>
+            </tr>
+
+        </table>
+
+
+
+        @*********************************************************************************************@
+
+        <table width="100%" style="background-color: white;" cellpadding="5" hidden="@(!firstTableHidden)">
+            <tr>
+                <td width="15%"><button disabled="@prevButtDisab" @onclick="DecreasePartiesNav">Предишна партия</button></td>
+                <td width="70%">
+                    @if (selectedParties.Count != 0)
+                    {
+                        <h3 style="text-align: center;">@selectedParties[partiesNav].Name</h3>
+                    }
+                    else
+                    {
+                        <h3 style="text-align: center;">Изберете партии</h3>
+                    }
+
+                </td>
+                <td width="15%"><button disabled="@nextButtDisab" @onclick="IncreasePartiesNav">Следваща партия</button></td>
+
+            </tr>
+            <tr>
+                <td></td>
+                <td>
+                    <table width="100%">
+                        <tr>
+                            <td>
+                                <h3>Всички кандидати на партията</h3>
+                            </td>
+                            <td>
+                                <h3>Избрани кандидати от партията</h3>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td width="50%">
+                                @if (selectedParties.Count != 0)
+                                {
+
+                                    if (partyCandidates.Count == 0)
+                                    {
+                                        <h4>Няма повече кандидати</h4>
+                                    }
+                                    else
+                                    {
+                                        @foreach (var can in partyCandidates.Where(c => c.FK_Party.ID == selectedParties[partiesNav].ID))
+                                        {
+
+                                            <p> @can.FirstName   @can.LastName </p> <button type="button" value="@can.ID" @onclick="(() => AddCandidate(can.ID))">Добави</button>
+
+                                        }
+                                    }
+
+
+
+                                }
+
+                            </td>
+                            <td width="50%">
+
+                                @if (selectedCandidates.Count != 0)
+                                {
+                                    @foreach (var can in selectedCandidates.Where(c => c.FK_Party.ID == selectedParties[partiesNav].ID))
+                                    {
+
+                                        <p> @can.FirstName   @can.LastName </p> <button type="button" value="@can.ID" @onclick="(() => RemoveCandidate(can.ID))">Премахни</button>
+
+                                    }
+
+                                }
+
+                            </td>
+                        </tr>
+
+                    </table>
+                </td>
+                <td></td>
+            </tr>
+            <tr>
+
+                <td>
+                    <button type="button" class="outline" @onclick="GoBack">Върни се</button>
+                </td>
+                <td></td>
+                <td>
+                    <button type="button" class="outline" @onclick="Submit">Създай</button>
+                </td>
+
+            </tr>
+            <tr>
+                <td colspan="3"> <h3 style="color:red; text-align:center">@errMess</h3> </td>
+
+            </tr>
+        </table>
+
+    </Authorized>
+</AuthorizeView>
+@code {
+    string errMess = string.Empty;
+    List<Party> allParties;
+    List<Party> selectedParties = new List<Party>();
+    PartyManager pm = new PartyManager(DBContextManager.CreateContext());
+    CandidateManager cm = new CandidateManager(DBContextManager.CreateContext());
+    string theme = string.Empty;
+    DateTime fromD = DateTime.Now;
+    DateTime toD = DateTime.Now.AddDays(1);
+    List<Candidate> selectedCandidates = new List<Candidate>();
+    List<Candidate> partyCandidates = new List<Candidate>();
+    bool firstTableHidden = false;
+    int partiesNav = 0;
+
+    bool prevButtDisab = false;
+    bool nextButtDisab = false;
+
+    List<string> refAnsw = new List<string>() { "Да", "Не", "Нямам мнение" };
+
+    bool refHid = true;
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            allParties = await pm.ReadAllAsync(true);
+
+
+        }
+        catch (Exception ex)
+        {
+            errMess = ex.Message;
+        }
+
+    }
+    int type = 1;
+    private void RadioOptChanged(ChangeEventArgs e)
+    {
+
+        type = int.Parse(e.Value.ToString());
+        if (type == 4)
+        {
+            refHid = false;
+        }
+        else
+        {
+            refHid = true;
+        }
+    }
+
+    private async Task AddParty(int id)
+    {
+        try
+        {
+            selectedParties.Add(await pm.ReadAsync(id, true));
+            allParties.Remove(selectedParties.FirstOrDefault(p => p.ID == id));
+            selectedParties = selectedParties.OrderBy(p => p.ID).ToList();
+        }
+        catch (Exception ex)
+        {
+            errMess = ex.Message;
+        }
+
+
+    }
+
+    private async Task RemoveParty(int id)
+    {
+        try
+        {
+
+            selectedParties.Remove(selectedParties.FirstOrDefault(p => p.ID == id));
+            allParties.Add(await pm.ReadAsync(id));
+            allParties = allParties.OrderBy(p => p.ID).ToList();
+
+        }
+        catch (Exception ex)
+        {
+            errMess = ex.Message;
+        }
+
+
+    }
+
+    private async Task AddCandidate(int id)
+    {
+        try
+        {
+
+            partyCandidates.Remove(partyCandidates.FirstOrDefault(c => c.ID == id));
+            selectedCandidates.Add(await cm.ReadAsync(id, true));
+        }
+        catch (Exception ex)
+        {
+            errMess = ex.Message;
+        }
+
+
+
+    }
+    private async Task RemoveCandidate(int id)
+    {
+        try
+        {
+            Candidate c = await cm.ReadAsync(id, true);
+            selectedCandidates.Remove(c);
+            partyCandidates.Add(c);
+
+        }
+        catch (Exception ex)
+        {
+            errMess = ex.Message;
+        }
+
+
+    }
+
+    private async Task NextForm()
+    {
+        try
+        {
+            if (fromD.CompareTo(DateTime.Now) >= 0)
+            {
+                if (fromD.CompareTo(toD) >= 0)
+                {
+                    errMess = "Не може датата на започване да е след датата на завършване на изборите!";
+
+                }
+                else
+                {
+                    if (theme.Length < 5)
+                    {
+                        errMess = "Темата на изборите трябва да е поне 5 знака!";
+                    }
+                    else
+                    {
+                        if (type != 4)
+                        {
+                            if (selectedParties.Count == 0)
+                            {
+                                errMess = "Изберете партии, които ще участват на изборите!";
+                            }
+                            else
+                            {
+                                firstTableHidden = true;
+                                partyCandidates = new List<Candidate>();
+                                foreach (var p in selectedParties)
+                                {
+                                    partyCandidates.AddRange(p.Candidates);
+                                }
+                                var intersectedCandidateIds = selectedCandidates.Select(x => x.ID).Intersect(partyCandidates.Select(y => y.ID)).ToList();
+                                selectedCandidates = selectedCandidates.Where(x => intersectedCandidateIds.Contains(x.ID)).ToList();
+
+                                var intersectedCandidateIds2 = selectedCandidates.Select(x => x.ID).Intersect(partyCandidates.Select(y => y.ID)).ToList();
+                                selectedCandidates = selectedCandidates.Where(x => intersectedCandidateIds2.Contains(x.ID)).ToList();
+                                partyCandidates.RemoveAll(y => intersectedCandidateIds2.Contains(y.ID));
+                                if (selectedParties.Count < 2)
+                                {
+                                    prevButtDisab = true;
+                                    partiesNav = 0;
+                                    nextButtDisab = true;
+                                }
+                                else
+                                {
+                                    prevButtDisab = true;
+                                    partiesNav = 0;
+                                    nextButtDisab = false;
+                                }
+                                errMess = string.Empty;
+                            }
+
+                        }
+                    }
+                }
+            }
+            else
+            {
+                errMess = "Не може датата на започване да е преди момента на създаване!";
+
+            }
+
+
+        }
+        catch (Exception ex)
+        {
+            errMess = ex.Message;
+        }
+
+
+
+    }
+    private async Task CreateRef()
+    {
+        try
+        {
+            if (type == 4)
+            {
+                if (fromD.CompareTo(DateTime.Now) >= 0)
+                {
+                    if (fromD.CompareTo(toD) >= 0)
+                    {
+                        errMess = "Не може датата на започване да е след датата на завършване на изборите!";
+
+                    }
+                    else
+                    {
+                        Question ques = new Question(theme);
+                        foreach (var item in refAnsw)
+                        {
+                            Answer ans = new Answer(item);
+                            ques.Answers.Add(ans);
+                        }
+                        Election election = new Election(type, ques, fromD, toD);
+                        ElectionManager em = new ElectionManager(DBContextManager.CreateContext());
+                        await em.CreateAsync(election);
+                        navManager.NavigateTo("/");
+                    }
+                }
+                else
+                {
+                    errMess = "Не може датата на започване да е преди момента на създаване!";
+
+                }
+            }
+
+        }
+        catch (Exception ex)
+        {
+            errMess = ex.Message;
+        }
+
+
+    }
+    private async Task GoBack()
+    {
+        firstTableHidden = false;
+        partiesNav = 0;
+    }
+
+    private async Task Submit()
+    {
+        try
+        {
+            if (selectedCandidates.Count != 0)
+            {
+                Question ques = new Question(theme);
+                QuestionManager qm = new QuestionManager(DBContextManager.CreateContext());
+                await qm.CreateAsync(ques);
+                foreach (var item in selectedCandidates)
+                {
+                    Candidate candidate = await cm.ReadAsync(item.ID, true);
+
+                    Answer ans = new Answer(candidate);
+
+
+                    ques.Answers.Add(ans);
+                }
+
+                await qm.UpdateAsync(ques);
+                Election election = new Election(type, fromD, toD);
+                ElectionManager em = new ElectionManager(DBContextManager.CreateContext());
+                election.QuestionID = (await qm.ReadAsync(ques.ID)).ID;
+                await em.CreateAsync(election);
+                Election newElec = await em.ReadAsync(election.ID);
+                foreach (var item in selectedParties)
+                {
+                    Party party = await pm.ReadAsync(item.ID);
+                    newElec.Parties.Add(party);
+                }
+                //  election.QuestionID = ques.ID;
+                await em.UpdateAsync(newElec);
+
+
+                navManager.NavigateTo("/");
+            }
+            else
+            {
+                errMess = "Добавете кандидати";
+            }
+
+        }
+        catch (Exception ex)
+        {
+            errMess = ex.Message;
+        }
+
+    }
+
+
+
+    private async Task IncreasePartiesNav()
+    {
+        partiesNav++;
+        if (partiesNav >= selectedParties.Count - 1)
+        {
+            nextButtDisab = true;
+
+        }
+        prevButtDisab = false;
+    }
+    private async Task DecreasePartiesNav()
+    {
+        partiesNav--;
+        if (partiesNav <= 0)
+        {
+            prevButtDisab = true;
+
+        }
+        nextButtDisab = false;
+    }
+}
+
+<style>
+    button {
+        cursor: pointer;
+        outline: none;
+    }
+
+        button.outline {
+            position: relative;
+            z-index: 3;
+            background: transparent;
+            color: #1172c4;
+            font-size: 14px;
+            border-color: #1172c4;
+            border-style: solid;
+            border-width: 2px;
+            border-radius: 22px;
+            padding: 10px 40px;
+            text-transform: uppercase;
+            font-weight: 550;
+            transition: all 0.2s linear;
+        }
+
+            button.outline a {
+                text-decoration: none;
+            }
+
+            button.outline:hover {
+                color: white;
+                background: #1172c4;
+                border-color: white;
+                transition: all 0.2s linear;
+            }
+
+            button.outline:active {
+                border-radius: 22px;
+            }
+</style>
+

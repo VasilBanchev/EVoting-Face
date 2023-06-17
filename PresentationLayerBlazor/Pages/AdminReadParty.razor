@@ -1,0 +1,68 @@
+﻿@page "/ReadParty/{idElection:int}"
+@using BusinessLayer;
+@using ServiceLayer;
+<AuthorizeView Roles="Admin">
+    <Authorized>
+@if (party != null)
+{
+            <table width="100%" cellpadding="5" style="background-color: white;  align-items: center; text-align:center">
+
+        <tr><td colspan="5"><h3 style="text-align:center">Пратия @party.Name</h3></td> </tr>
+        <tr><td colspan="5"><h4 style="text-align:center">Лидер: @party.PartyLeader</h4></td>  </tr>
+        <tr><td colspan="5"> <h4 style="text-align:center">  Брой кандидати: @party.Candidates.Count</h4></td></tr>
+        
+        @if (party.Candidates!=null && party.Candidates.Count!=0)
+        {
+            <tr>
+                <td>ID в базата данни</td>
+                <td>Име</td>
+                <td>Презиме</td>
+                <td>Фамилия</td>
+                <td>Регион</td>
+                </tr>
+            @foreach (var can in party.Candidates)
+            {
+                <tr>
+                <td>@can.ID</td>
+                <td>@can.FirstName</td>
+                <td>@can.MidName</td>
+                <td>@can.LastName</td>
+                <td>@can.Region</td>
+                </tr>
+                
+            }
+          
+        }
+    </table>
+
+
+
+}
+
+    </Authorized>
+</AuthorizeView>
+
+
+
+<label id="error" class="col-md-4 text-danger">@errMess</label>
+@code {
+    string errMess = string.Empty;
+    [Parameter]
+    public int idElection { get; set; }
+    Party party;
+    PartyManager pm = new PartyManager(DBContextManager.CreateContext());
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+        party = await pm.ReadAsync(idElection, true);
+
+
+        }
+        catch (Exception ex)
+        {
+            errMess = ex.Message;
+        }
+
+    }
+}

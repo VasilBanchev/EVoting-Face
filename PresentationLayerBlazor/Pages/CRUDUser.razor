@@ -1,0 +1,167 @@
+﻿@page "/CRUDUser"
+@using BlazorServer.Pages;
+@using BlazorServer.Services;
+@using BusinessLayer;
+@using ServiceLayer;
+
+@inject IdentityManager identityManager;
+@inject IJSRuntime JsRuntime;
+
+
+<AuthorizeView Roles="Admin">
+    <Authorized>
+
+        <h3 style="text-align:center;  background-color: rgba(255, 255, 255, 0.7); padding: 10px;   color: black;">Управление на потребители</h3>
+        <div style="background-color:white; margin:5px; text-align: center;">
+<label >Въведи ЕГН за да прочетеш потребител:</label>
+<input type="text" maxlength="10" @bind-value="searchedEGN" placeholder="ЕГН" />
+<button class="outline" style="margin:5px;" @onclick="Read"> Търси</button>
+<label id="error" class="col-md-4 text-danger">@errMess</label>
+        </div>
+<br /><br/>
+
+@if (user != null && user.FK_IDCard != null)
+{
+    <EditForm Model="@user.FK_IDCard" Context="CONTEXT" OnSubmit="Update" style="background-color:white;">
+        <center>
+            <h3>Данни на потребителя</h3>
+            <label>Име: </label> <input type="text" placeholder="Име" @bind-value="user.FK_IDCard.Name" required /><br /><br />
+            <label>Презиме: </label> <input type="text" placeholder="Презиме" @bind-value="user.FK_IDCard.MidName" required /><br /><br />
+            <label>Фамилия: </label> <input type="text" placeholder="Фамилия" @bind-value="user.FK_IDCard.LastName" required /><br /><br />
+            <label> <big>Местожителство</big></label> <select @bind="user.FK_IDCard.Region">
+                <br />
+                @for (int i = 0; i < regions.Count; i++)
+                {
+                    <option value="@i">
+                        @regions[i]
+                    </option>
+                }
+            </select><br /><br />
+            <label><big>Дата на изтичане на личната карта: </big></label><br /><br />
+
+            <input type="date" @bind-value="user.FK_IDCard.DateOfExpiry" required /><br /><br />
+
+                    <InputFile accept=".png,.jpg" OnChange="@AddFrontPhoto" />
+                    <label><big>Снимка на задната част на личната карта:</big> </label><br />
+
+            <label><big>При подадено заявление променете паролата</big></label><input type="password" placeholder="Парола" @bind-value="passwordChange"><br /><br />
+                    <button class="outline green" style="margin: 5px" type="submit"><big>Промени</big></button>
+                    <center><button class="outline red" style="margin: 5px" type="button" @onclick="Delete"><big>Изтрий</big></button></center>
+
+        </center>
+    </EditForm>
+    <br />
+
+    <center><label id="error" class="col-md-4 text-danger">@errMess</label></center>
+
+}
+
+</Authorized>
+</AuthorizeView>
+
+
+
+@code {
+    string searchedEGN = string.Empty;
+    string errMess = string.Empty;
+    User user;
+    IDCardPhotos photoes;
+    List<string> regions = new List<string>() { "Благоевград", "Бургас", "Варна", "Велико Търново", "Видин", "Враца", "Габрово", "Кърджали", "Кюстендил", "Ловеч", "Монтана", "Пазарджик", "Перник", "Плевен", "Пловдив", "Разград", "Русе", "Силистра", "Сливен", "Смолян", "София – град", "София – окръг", "Стара Загора", "Добрич", "Търговище", "Хасково", "Шумен", "Ямбол", "Друг/Неизвестен" };
+    string passwordChange = string.Empty;
+    private async Task Read()
+    {
+        try
+        {
+            if (searchedEGN.Length == 10)
+            {
+                user = await identityManager.ReadUserEGNAsync(searchedEGN, true);
+                if (user == null)
+                {
+                    await JsRuntime.InvokeVoidAsync("alert", $"Няма такъв потребител");
+
+                }
+                errMess = string.Empty;
+            }
+            else
+            {
+                errMess = "Дължината на ЕГН трябва да е 10 символа";
+            }
+        }
+        catch (Exception ex)
+        {
+            errMess = ex.Message;
+        }
+
+    }
+    private async Task Update()
+    {
+        try
+        {
+            if (passwordChange.Length >= 6)
+            {
+                await identityManager.ChangePassword(user.Id, passwordChange);
+
+            }
+            if (photoes!=null)
+            {
+                IDCardPhotosManager idcpm = new IDCardPhotosManager(DBContextManager.CreateContext());
+                await idcpm.UpdateAsync(photoes);
+            }
+            await identityManager.UpdateUserAsync(user, true);
+            await JsRuntime.InvokeVoidAsync("alert", $"Успешно променен потребител");
+
+            user = null;
+            searchedEGN = string.Empty;
+        }
+        catch (Exception ex)
+        {
+            errMess = ex.Message;
+
+        }
+    }
+    private async Task Delete()
+    {
+        try
+        {
+            bool confirmed = await JsRuntime.InvokeAsync<bool>("confirm", "Сигурни ли сте че искате да изтриете потребителя?");
+            if (confirmed)
+            {
+                await identityManager.DeleteUserByEGNAsync(searchedEGN);
+                await JsRuntime.InvokeVoidAsync("alert", $"Успешно изтрит потребител");
+
+                user = null;
+                searchedEGN = string.Empty;
+            }
+        }
+        catch (Exception ex)
+        {
+            errMess = ex.Message;
+
+        }
+
+    }
+    private async Task AddFrontPhoto(InputFileChangeEventArgs e)
+    {
+        try
+        {
+            var file = e.File;
+            if (file != null)
+            {
+                using (var ms = new MemoryStream())
+                {
+                    await file.OpenReadStream(5 * 1024 * 1024).CopyToAsync(ms);
+                    IDCardManager cm = new IDCardManager(DBContextManager.CreateContext());
+                    photoes = (await cm.ReadEGNAsync(searchedEGN, true)).CardPhotos;
+                    
+                    photoes.PersonPhoto = ms.ToArray();
+
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            errMess = ex.Message;
+        }
+    }
+
+}

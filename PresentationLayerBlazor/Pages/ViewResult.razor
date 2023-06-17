@@ -1,0 +1,141 @@
+﻿@page "/Result/{idElection:int}"
+@using BusinessLayer;
+@using ServiceLayer;
+<AuthorizeView Roles="Admin, User">
+    
+@if (election != null)
+{
+    if (election.Dateto.CompareTo(DateTime.Now.AddMinutes(2)) <= 0)
+    {
+        <h2 style="text-align:center;  background-color: rgba(255, 255, 255, 0.5); padding: 10px;   color: black;">@election.Question.Text <br> @SumVotes(answers) гласа общо</h2>
+        <table width="100%" cellpadding="5" style="background-color: white;  align-items: center; text-align:center">
+            @if (election.Type == 4)
+            {
+                <tr>
+                    <td width="33%"><h4>Отговор: @election.Question.Answers[0].Text => @election.Question.Answers[0].Votes гласа @PercentVotes(election.Question.Answers[0].Votes, SumVotes(answers))</h4></td>
+                    <td width="34%"><h4>Отговор: @election.Question.Answers[1].Text => @election.Question.Answers[1].Votes гласа @PercentVotes(election.Question.Answers[1].Votes, SumVotes(answers))</h4></td>
+                    <td width="33%"><h4>Отговор: @election.Question.Answers[2].Text => @election.Question.Answers[2].Votes гласа @PercentVotes(election.Question.Answers[2].Votes, SumVotes(answers))</h4></td>
+                </tr>
+            }
+            else if (election.Type == 3)
+            {
+                foreach (var reg in regions)
+                {
+                  List<Answer>  regAnswers = answers.Where(a => a.RegionText == reg).ToList();
+                        <tr><td colspan="3"><h2>@reg @SumVotes(regAnswers)</h2></td></tr>
+                    @foreach (var item in partiesTookPlace)
+                    {
+                        List<Answer> selAnswers = new List<Answer>();
+                        selAnswers = regAnswers.Where(a => a.PartyName == item).ToList();
+                        if (selAnswers != null && selAnswers.Count != 0)
+                        {
+                            <tr><td colspan="3"><h2>@selAnswers[0].PartyName - @SumVotes(selAnswers) гласа - @PercentVotes(SumVotes(selAnswers), SumVotes(regAnswers))</h2></td></tr>
+                            for (int i = 0; i < selAnswers.Count(); i += 2)
+                            {
+                                <tr>
+                                    <td width="33%"><h5>Кандидат: @selAnswers[i].Text => @selAnswers[i].Votes гласа - @PercentVotes(@selAnswers[i].Votes, SumVotes(regAnswers))</h5></td>
+
+                                    @if (@selAnswers.Count > i + 1)
+                                    {
+                                        <td width="33%"><h5>Кандидат: @selAnswers[i+1].Text => @selAnswers[i+1].Votes гласа - @PercentVotes(@selAnswers[i+1].Votes, SumVotes(regAnswers))</h5></td>
+
+                                    }
+
+                                </tr>
+                            }
+                        }
+                    }
+            }
+            }
+            else
+            {
+                @foreach (var item in partiesTookPlace)
+                {
+                    List<Answer> selAnswers = new List<Answer>();
+                    selAnswers = answers.Where(a => a.PartyName == item).ToList();
+                    
+                    if (selAnswers != null && selAnswers.Count != 0)
+                    {
+                        <tr><td colspan="3"><h2>@selAnswers[0].PartyName - @SumVotes(selAnswers) гласа - @PercentVotes(SumVotes(selAnswers), SumVotes(answers))</h2></td></tr>
+                        for (int i = 0; i < selAnswers.Count(); i += 2)
+                        {
+                            <tr>
+                                <td width="33%"><h5>Кандидат: @selAnswers[i].Text => @selAnswers[i].Votes гласа - @PercentVotes(@selAnswers[i].Votes, SumVotes(answers))</h5></td>
+
+                                @if (@selAnswers.Count > i + 1)
+                                {
+                                    <td width="33%"><h5>Кандидат: @selAnswers[i+1].Text => @selAnswers[i+1].Votes гласа - @PercentVotes(@selAnswers[i+1].Votes, SumVotes(answers))</h5></td>
+
+                                }
+                               
+                            </tr>
+                        }
+                    }
+
+                }
+            }
+        </table>
+    }
+}
+    <label id="error" class="col-md-4 text-danger">@errMess</label>
+
+</AuthorizeView>
+
+@code {
+    string errMess = string.Empty; [Parameter]
+    public int idElection { get; set; }
+    Election election;
+    ElectionManager em = new ElectionManager(DBContextManager.CreateContext());
+    List<Answer> answers = new List<Answer>();
+    List<string> partiesTookPlace = new List<string>();
+    List<string> regions = new List<string>() { "Благоевград", "Бургас", "Варна", "Велико Търново", "Видин", "Враца", "Габрово", "Кърджали", "Кюстендил", "Ловеч", "Монтана", "Пазарджик", "Перник", "Плевен", "Пловдив", "Разград", "Русе", "Силистра", "Сливен", "Смолян", "София – град", "София – окръг", "Стара Загора", "Добрич", "Търговище", "Хасково", "Шумен", "Ямбол", "Друг/Неизвестен" };
+
+    protected override async Task OnInitializedAsync()
+    { try
+        {
+  election = await em.ReadAsync(idElection, true);
+        if (election.Type != 4)
+        {
+            answers = election.Question.Answers;
+            answers = answers.OrderBy(a => a.PartyName).ThenBy(a => a.CandidateID).ToList();
+            partiesTookPlace = (answers.Select(a => a.PartyName).ToList()).Distinct().ToList();
+        }
+        else
+            {
+                answers = election.Question.Answers;
+
+            }
+
+ }
+        catch (Exception ex)
+        {
+            errMess = ex.Message;
+        }
+
+      
+    }
+    private int SumVotes(List<Answer> ans)
+    {
+        int sumVotesParty = 0;
+        foreach (var item in ans)
+        {
+            sumVotesParty += item.Votes;
+        }
+        return sumVotesParty;
+    }
+    private string PercentVotes(int votes, int allVotes)
+    {
+        if (allVotes != 0)
+        {
+            double percent = (double)votes / allVotes;
+            percent *= 100;
+            return Math.Round(percent, 2) + "%";
+
+        }
+        else
+        {
+            return "Няма гласували";
+        }
+
+    }
+}

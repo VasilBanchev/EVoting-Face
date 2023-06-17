@@ -1,0 +1,75 @@
+﻿@using BusinessLayer;
+@using ServiceLayer;
+@inject NavigationManager navManager;
+@page "/ActiveElections"
+<AuthorizeView Roles="Admin">
+    <Authorized>
+
+
+<h3 style="text-align:center;  background-color: rgba(255, 255, 255, 0.5); padding: 10px;   color: black;">
+    Настоящи избори
+</h3>
+<table width="100%" style="background-color: white;" cellpadding="5">
+    @if (activeElections.Count != 0)
+    {
+        <tr>
+            <td>Тип:</td>
+            <td>Начало:</td>
+            <td>Край:</td>
+            <td></td>
+        </tr>
+        @if (activeElections.Count != 0)
+        {
+            foreach (var item in activeElections)
+            {
+                <tr>
+                    <td width="25%">@TypeToString(item.Type)</td>
+                    <td width="25%">@item.DateFrom</td>
+                    <td width="25%">@item.Dateto</td>
+                    <td width="25%"><button class="outline" @onclick="() => View(item.ID)">Виж повече</button></td>
+                </tr>
+            }
+        }
+
+    }
+</table>
+<label id="error" class="col-md-4 text-danger">@errMess</label>
+
+    </Authorized>
+</AuthorizeView>
+
+@code {
+    string errMess = string.Empty;
+    ElectionManager em = new ElectionManager(DBContextManager.CreateContext());
+    List<Election> activeElections = new List<Election>();
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            activeElections = (await em.ReadAllAsync()).Where(e => e.DateFrom.CompareTo(DateTime.Now) <= 0 && e.Dateto.CompareTo(DateTime.Now) >= 0).ToList();
+        }
+        catch (Exception ex)
+        {
+            errMess = ex.Message;
+        }
+    }
+
+    private string TypeToString(int type)
+    {
+        string[] types = { "Президентски", "Парламентарни", "Местни", "Референдум" };
+        return types[type - 1];
+    }
+
+    private async Task View(int electionID)
+    {
+        try
+        {
+            navManager.NavigateTo($"/AdminCurrentElection/{electionID}");
+        }
+        catch (Exception ex)
+        {
+            errMess = ex.Message;
+        }
+    }
+}

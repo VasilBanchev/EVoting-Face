@@ -1,0 +1,112 @@
+﻿@using BusinessLayer;
+@using ServiceLayer;
+@inject NavigationManager navManager;
+@page "/AllElections"
+
+<AuthorizeView Roles="User">
+    <Authorized>
+
+<h3 style="text-align:center;  background-color: rgba(255, 255, 255, 0.5); padding: 10px;   color: black;">Всички избори</h3>
+<table width="100%" style="background-color: white; text-align:center" cellpadding="5">
+    @if (elections.Count != 0)
+    {
+        <tr style="text-align:center"><td colspan="4"><h3> Настоящи избори: @currentElections.Count</h3></td></tr>
+        <tr>
+            <td>Тип:</td>
+            <td>Начало:</td>
+            <td>Край:</td>
+            <td></td> 
+        </tr>
+        @if (currentElections.Count !=0)
+            {
+                foreach (var item in currentElections)
+                {
+                    <tr>
+                            <td width="25%">@TypeToString(item.Type)</td>
+                            <td width="25%">@item.DateFrom</td>
+                            <td width="25%">@item.Dateto</td>
+                            <td width="25%"><button class="outline green" style="padding:10px 20px" @onclick="() => VoteRedirect(item.ID)" id="@item.ID">Гласувай</button></td>
+                    </tr>
+                }
+            }
+        <tr style="text-align:center"><td colspan="4"><h3> Предстоящи избори: @futureElections.Count </h3></td></tr>
+
+        @if (futureElections.Count != 0)
+        {
+            foreach (var item in futureElections)
+            {
+                <tr>
+                            <td width="25%">@TypeToString(item.Type)</td>
+                            <td width="25%">@item.DateFrom</td>
+                            <td width="25%">@item.Dateto</td>
+                            <td width="25%"><button class="outline red" style="padding:10px 20px" @onclick="() => ViewFutureElections(item.ID)" id="@item.ID">Повече информация</button></td>
+                </tr>
+            }
+        }
+        <tr style="text-align:center"><td colspan="4"><h3> Минали избори: @previousElections.Count  </h3></td></tr>
+
+        @if (previousElections.Count != 0)
+        {
+            foreach (var item in previousElections.Take(10))
+            {
+                <tr>
+                            <td width="25%">@TypeToString(item.Type)</td>
+                            <td width="25%">@item.DateFrom</td>
+                            <td width="25%">@item.Dateto</td>
+                            <td width="25%"><button class="outline" style="padding:10px 20px;" @onclick="() => ViewResult(item.ID)">Виж резултати</button></td>
+                </tr>
+            }
+        }
+
+    }              
+</table>
+
+    </Authorized>
+</AuthorizeView>
+
+<label id="error" class="col-md-4 text-danger">@errMess</label>
+@code {
+    string errMess = string.Empty; ElectionManager em = new ElectionManager(DBContextManager.CreateContext());
+    List<Election> elections = new List<Election>();
+    List<Election> currentElections = new List<Election>();
+    List<Election> futureElections = new List<Election>();
+    List<Election> previousElections = new List<Election>();
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+  elections = await em.ReadAllAsync();
+        currentElections = elections.Where(e => e.DateFrom.CompareTo(DateTime.Now) <= 0 && e.Dateto.CompareTo(DateTime.Now) >= 0).ToList();
+        futureElections = elections.Where(e => e.DateFrom.CompareTo(DateTime.Now) >= 0).ToList();
+        previousElections = elections.Where(e => e.Dateto.CompareTo(DateTime.Now) <= 0).ToList();
+
+        }
+        catch (Exception ex)
+        {
+            errMess = ex.Message;
+        }
+
+      
+    }
+
+    private string TypeToString(int type)
+    {
+        string[] types = { "Президентски", "Парламентарни", "Местни", "Референдум"};
+        return types[type - 1];
+    } 
+    private async Task VoteRedirect(int electionID)
+    {
+        navManager.NavigateTo($"/Vote/{electionID}");
+    }
+    private async Task ViewResult(int electionID)
+    {
+        navManager.NavigateTo($"/Result/{electionID}");
+
+    }
+    private async Task ViewFutureElections(int electionID)
+    {
+        navManager.NavigateTo($"/FutureElections/{electionID}");
+
+    }
+}

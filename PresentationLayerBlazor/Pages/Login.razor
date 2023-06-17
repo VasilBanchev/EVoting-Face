@@ -1,0 +1,428 @@
+﻿@page "/login"
+@using BlazorServer.Pages;
+@using BlazorServer.Services;
+@using BusinessLayer;
+@using System.Security.Claims;
+
+@using ServiceLayer;
+@using Microsoft.Extensions.Logging;
+@inject IdentityManager identityManager;
+@inject ErrorModel errorModel;
+@inject ILogger<User> logger;
+@inject NavigationManager navigationManager;
+@inject CustomAuthenticationStateProvider authenticationStateProvider;
+@inject IJSRuntime JsRuntime;
+@using System.Diagnostics;
+@using System.Text;
+@using Microsoft.AspNetCore.Cryptography.KeyDerivation;
+@using System.Security.Cryptography;
+
+<AuthorizeView Roles="Admin, User">
+    <Authorized>
+
+
+    </Authorized>
+
+    <NotAuthorized>
+
+        <EditForm Model="@model" Context="CONTEXT" OnValidSubmit="@HandleValidSubmit" hidden="@takePhoto">
+                    <DataAnnotationsValidator />
+                    <ValidationSummary />
+                    <div class="form-box">
+                        <div class="header-text">
+                            <h3>Вход в системата</h3>
+                        </div>
+                        <InputText id="name" placeholder="ЕГН" maxlength="10" class="form-control" @bind-Value="model.UserName " />
+
+
+                        <InputText class="form-control" placeholder="Парола" id="password" type="password" @bind-Value="model.PasswordHash" />
+                        <button type="submit" class="btn border-dark mt-2 ml-3">Вход</button>
+
+                    </div>
+                </EditForm>
+           <br />
+           <br />
+                <center>
+
+                    <table style="visibility:@takePhoto; background-color:rgba(255, 255, 255, 0.7);">
+                        <canvas id="canvas" width="640px" height="480px" style="display:none;"></canvas>
+                        <video id="video" width="640px" height="480px" style="display:none;" autoplay></video>
+                       <center> <button id="captureButton" class="outline green" @onclick="CapturePhoto" style="margin:15px; display:none;">Снимай</button> </center>
+
+                    </table>
+                </center>
+
+             <h4 id="error" class="col-md-4 text-danger">@errorModel.Description</h4>
+    </NotAuthorized>
+</AuthorizeView>
+
+@code
+{
+    private User model = new User();
+    bool takePhoto = false;
+    byte[] photo3;
+    private AuthenticationState? authenticationState;
+    User userToLog;
+    protected override async void OnInitialized()
+    {
+        
+             await identityManager.SeedDataAsync("admin", "admin");
+
+         
+    }
+
+
+    private async Task HandleValidSubmit()
+    {
+        try
+        {
+            userToLog = await identityManager.ReadUserEGNAsync(model.UserName, true, true);
+            if (userToLog != null)
+            {
+                if (userToLog.FK_IDCard == null)
+                {
+
+                    if (userToLog.Authenticated == false)
+                    {
+                        navigationManager.NavigateTo($"WaitPage/{userToLog.Id}", true);
+                    }
+                    else
+                    {
+                        try
+                        {
+                           // new AuthenticationState(await identityManager.LogInUserAsync(model.UserName, model.PasswordHash));
+
+                            authenticationState = new AuthenticationState(await identityManager.LogInUserAsync(model.UserName, model.PasswordHash));
+
+                            await authenticationStateProvider.NotifyAuthenticationStateChanged
+                           (Task<AuthenticationState>.FromResult(authenticationState));
+
+
+                            if (await authenticationStateProvider.GetUserIdentity(true) != null &&
+                                await authenticationStateProvider.IsAuthenticated(true))
+                            {
+
+                                await JsRuntime.InvokeVoidAsync("alert", "Влезнахте успешно!");
+
+                                navigationManager.NavigateTo("/", true); // Rerender the navigation menu!
+                            }
+                            else
+                            {
+                                await JsRuntime.InvokeVoidAsync("alert", "Грешка при входа");
+                                model = new User();
+                            }
+                        }
+                        catch (Exception)
+                        {
+
+                            await JsRuntime.InvokeVoidAsync("alert", "Грешни входни данни");// да не се разбира дали ЕГНто е използвано и да се започнат атаки за отгатвнане на паролата
+                            model = new User();
+                        }
+                    }
+                }
+                else
+                {
+                    if (await identityManager.LogInUserAsync(model.UserName, model.PasswordHash)==null)
+                    {
+                        await JsRuntime.InvokeVoidAsync("alert", "Грешни входни данни");
+                    }else
+                    {
+                            takePhoto = true;
+                            await JsRuntime.InvokeVoidAsync("initializeCameraInterop");
+                            await JsRuntime.InvokeVoidAsync("setElementStyle", "captureButton", "display", "block");
+                            await JsRuntime.InvokeVoidAsync("setElementStyle", "video", "display", "block");
+                    }
+                }
+            }
+            else
+            {
+                await JsRuntime.InvokeVoidAsync("alert", "Грешни входни данни");// да не се разбира дали ЕГНто е използвано и да се започнат атаки за отгатвнане на паролата
+                model = new User();
+            }
+
+        }
+        catch (Exception ex) 
+        {
+            errorModel.Code = "DB";
+            errorModel.Description = ex.Message;
+            logger.Log(LogLevel.Error, ex.Message);
+        }
+    }
+
+    private async Task CapturePhoto()
+    {
+        try
+        {
+            var imageDataUrl = await JsRuntime.InvokeAsync<string>("capturePhoto");
+            var base64Data = imageDataUrl.Substring(imageDataUrl.IndexOf(',') + 1);
+            var photo = Convert.FromBase64String(base64Data);
+
+            await JsRuntime.InvokeVoidAsync("stopCamera");
+            await JsRuntime.InvokeVoidAsync("setElementStyle", "video", "display", "none");
+            await JsRuntime.InvokeVoidAsync("setElementStyle", "canvas", "display", "block");
+
+            await JsRuntime.InvokeVoidAsync("setElementStyle", "captureButton", "display", "none");
+
+            string response = await AI(photo, userToLog.FK_IDCard.CardPhotos.PersonPhoto);
+            if (response == "True")
+            {
+
+                if (userToLog.Authenticated == false)
+                {
+                    navigationManager.NavigateTo($"WaitPage/{userToLog.Id}", true);
+                }
+                else
+                {
+                    try
+                    {
+                        new AuthenticationState(await identityManager.LogInUserAsync(model.UserName, model.PasswordHash));
+
+                        authenticationState = new AuthenticationState(await identityManager.LogInUserAsync(model.UserName, model.PasswordHash));
+
+                        await authenticationStateProvider.NotifyAuthenticationStateChanged
+                       (Task<AuthenticationState>.FromResult(authenticationState));
+
+
+                        if (await authenticationStateProvider.GetUserIdentity(true) != null &&
+                            await authenticationStateProvider.IsAuthenticated(true))
+                        {
+
+                              await JsRuntime.InvokeVoidAsync("alert", "Влезнахте успешно!");
+
+                            navigationManager.NavigateTo("/", true); // Rerender the navigation menu!
+                        }
+                        else
+                        {
+                            await JsRuntime.InvokeVoidAsync("alert", "Грешка при входа");
+                            model = new User();
+                        }
+                    }
+                    catch (Exception)
+                    {
+
+                        await JsRuntime.InvokeVoidAsync("alert", "Грешни входни данни");// да не се разбира дали ЕГНто е използвано и да се започнат атаки за отгатвнане на паролата
+                        model = new User();
+                    }
+                }
+            }
+            else if (response == "False")
+            {
+                await JsRuntime.InvokeVoidAsync("alert", "Лицата не съвпадат");
+                await RetakePhoto();
+
+            }
+            else
+            {
+                await JsRuntime.InvokeVoidAsync("alert", "Грешка при снимката за вход, опитайте отново");
+                await RetakePhoto();
+            }
+
+
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error capturing photo: {ex.Message}");
+        }
+    }
+
+
+    private async Task RetakePhoto()
+    {
+        await JsRuntime.InvokeVoidAsync("setElementStyle", "video", "display", "block");
+        await JsRuntime.InvokeVoidAsync("setElementStyle", "canvas", "display", "none");
+        // await JSRuntime.InvokeVoidAsync("setElementStyle", "retakeButton", "display", "none");
+        await JsRuntime.InvokeVoidAsync("setElementStyle", "captureButton", "display", "block");
+
+        await JsRuntime.InvokeVoidAsync("initializeCameraInterop");
+        photo3 = null;
+    }
+
+
+    private async Task<string> AI(byte[] capturedimage, byte[] dbImage)
+    {
+        string pythonScript = @"
+import sys
+import base64
+import numpy as np
+import face_recognition
+from io import BytesIO
+from PIL import Image
+
+def compare_faces(image1_bytes, image2_bytes):
+    image1 = np.array(Image.open(BytesIO(image1_bytes)))
+    image2 = np.array(Image.open(BytesIO(image2_bytes)))
+
+    image1_encodings = face_recognition.face_encodings(image1)
+    image2_encodings = face_recognition.face_encodings(image2)
+
+    if len(image1_encodings) == 0 or len(image2_encodings) == 0:
+        return 'No faces found in one or both images.'
+
+    match = face_recognition.compare_faces(image1_encodings, image2_encodings[0], tolerance=0.5)
+
+    if match[0]:
+        return 'True'
+    else:
+        return 'False'
+
+if __name__ == '__main__':
+    image1_base64 = sys.stdin.readline().strip()
+    image2_base64 = sys.stdin.readline().strip()
+
+    image1_bytes = base64.b64decode(image1_base64)
+    image2_bytes = base64.b64decode(image2_base64)
+
+    result = compare_faces(image1_bytes, image2_bytes)
+    print(result)
+";
+
+
+
+        var processInfo = new ProcessStartInfo
+            {
+                FileName = "python",
+                RedirectStandardInput = true,
+                RedirectStandardOutput = true,
+                UseShellExecute = false,
+                CreateNoWindow = true,
+                Arguments = "-c \"" + pythonScript + "\"",
+            };
+
+        using (var process = new Process { StartInfo = processInfo })
+        {
+            process.Start();
+
+            using (var streamWriter = new StreamWriter(process.StandardInput.BaseStream, Encoding.ASCII))
+            {
+                // byte[] image2Bytes = File.ReadAllBytes(image2Path);
+
+                string image1Base64 = Convert.ToBase64String(capturedimage);
+                string image2Base64 = Convert.ToBase64String(dbImage);
+
+                streamWriter.WriteLine(image1Base64);
+                streamWriter.WriteLine(image2Base64);
+            }
+
+            string result = process.StandardOutput.ReadLine();
+            return result;
+            process.WaitForExit();
+        }
+    }
+
+
+
+}
+<style>
+    * {
+        box-sizing: border-box;
+    }
+
+    body {
+        font-family: poppins;
+        font-size: 16px;
+        color: #fff;
+    }
+
+    .form-box {
+        background-color: rgba(0, 0, 0, 0.5);
+        margin: auto auto;
+        padding: 40px;
+        border-radius: 5px;
+        box-shadow: 0 0 10px #000;
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        width: 500px;
+        height: 430px;
+    }
+
+        .form-box:before {
+            width: 100%;
+            height: 100%;
+            background-size: cover;
+            content: "";
+            position: fixed;
+            left: 0;
+            right: 0;
+            top: 0;
+            bottom: 0;
+            z-index: -1;
+            display: block;
+            filter: blur(2px);
+        }
+
+        .form-box .header-text {
+            font-size: 32px;
+            font-weight: 600;
+            padding-bottom: 30px;
+            text-align: center;
+        }
+
+        .form-box input {
+            margin: 10px 0px;
+            border: none;
+            padding: 10px;
+            border-radius: 5px;
+            width: 100%;
+            font-size: 18px;
+            font-family: poppins;
+        }
+
+            .form-box input[type=checkbox] {
+                display: none;
+            }
+
+        .form-box label {
+            position: relative;
+            margin-left: 5px;
+            margin-right: 10px;
+            top: 5px;
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            cursor: pointer;
+        }
+
+            .form-box label:before {
+                content: "";
+                display: inline-block;
+                width: 20px;
+                height: 20px;
+                border-radius: 5px;
+                position: absolute;
+                left: 0;
+                bottom: 1px;
+                background-color: #ddd;
+            }
+
+        .form-box input[type=checkbox]:checked + label:before {
+            content: "\2713";
+            font-size: 20px;
+            color: #000;
+            text-align: center;
+            line-height: 20px;
+        }
+
+        .form-box span {
+            font-size: 14px;
+        }
+
+        .form-box button {
+            background-color: #2828aa;
+            color: #fff;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            width: 100%;
+            font-size: 18px;
+            padding: 10px;
+            margin: 20px 0px;
+        }
+
+    span a {
+        color: #BBB;
+    }
+
+</style>

@@ -1,0 +1,165 @@
+﻿@using System.Security.Claims;
+@using BlazorServer.Pages;
+@using BusinessLayer;
+@using ServiceLayer;
+@using System.Security.Principal;
+@using System.Security.Claims;
+@using BlazorServer.Services;
+@using Microsoft.Extensions.Logging;
+@inject ErrorModel errorModel;
+@inject ILogger<User> logger;
+@inject NavigationManager navigationManager;
+@inject IdentityManager identityManager;
+@inject CustomAuthenticationStateProvider authenticationStateProvider;
+
+
+<div class="top-row ps-3 navbar navbar-dark">
+    <div class="container-fluid">
+        <a class="navbar-brand" href="">Онлайн гласуване</a>
+        <button title="Navigation menu" class="navbar-toggler" @onclick="ToggleNavMenu">
+            <span class="navbar-toggler-icon"></span>
+        </button>
+    </div>
+</div>
+
+<div class="@NavMenuCssClass nav-scrollable" @onclick="ToggleNavMenu">
+    <nav class="flex-column">
+
+        <AuthorizeView Roles="Admin">
+           
+            <div class="nav-item px-3">
+                <NavLink class="nav-link" href="CRUDCandidate">
+                    <span class="oi oi-list-rich" aria-hidden="true"></span>Управлявай кандидати
+                </NavLink>
+            </div>
+            <div class="nav-item px-3">
+                <NavLink class="nav-link" href="CreateParty">
+                    <span class="oi oi-list-rich" aria-hidden="true"></span>Управлявай партии
+                </NavLink>
+            </div>
+            <div class="nav-item px-3">
+                <NavLink class="nav-link" href="VerifyUsers">
+                    <span class="oi oi-list-rich" aria-hidden="true"></span>Потвърди потребители
+                </NavLink>
+            </div>
+            <div class="nav-item px-3">
+                <NavLink class="nav-link" href="CRUDUser">
+                    <span class="oi oi-list-rich" aria-hidden="true"></span><small>Управлявай потребители</small>
+                </NavLink>
+            </div>
+            <div class="nav-item px-3">
+                <NavLink class="nav-link" href="CreateElection">
+                    <span class="oi oi-list-rich" aria-hidden="true"></span> Създай избори
+                </NavLink>
+            </div>
+            <div class="nav-item px-3">
+                <NavLink class="nav-link" href="AdminFutureElections">
+                    <span class="oi oi-list-rich" aria-hidden="true"></span> Предстоящи избори
+                </NavLink>
+            </div>
+            <div class="nav-item px-3">
+                <NavLink class="nav-link" href="PastElections">
+                    <span class="oi oi-list-rich" aria-hidden="true"></span> Проведени избори
+                </NavLink>
+            </div>
+            <div class="nav-item px-3">
+                <NavLink class="nav-link" href="ActiveElections">
+                    <span class="oi oi-list-rich" aria-hidden="true"></span> Настоящи избори
+                </NavLink>
+            </div>
+
+        </AuthorizeView>
+
+        <AuthorizeView Roles="User">
+            <div class="nav-item px-3">
+                <NavLink class="nav-link" href="Profile">
+                    <span class="oi oi-person" aria-hidden="true"></span> Профил
+                </NavLink>
+            </div>
+            <div class="nav-item px-3">
+                <NavLink class="nav-link" href="AllElections">
+                    <span class="oi oi-list-rich" aria-hidden="true"></span> Избори
+                </NavLink>
+            </div>
+
+
+        </AuthorizeView>
+        <AuthorizeView Roles="Admin, User">
+            <Authorized>
+            <style>
+                .full-width-btn {
+                    color: white;
+                    display: block;
+                    width: 100%;
+                    text-align: left;
+                    padding: 0.5rem 1rem;
+                }
+            </style>
+            <div class="nav-item px-3">
+                <button class="nav-link btn btn-link full-width-btn" @onclick="LogOutMethod">
+                    <span class="oi oi-account-logout" aria-hidden="true"></span> Изход
+                </button>
+            </div>
+            </Authorized>
+            <NotAuthorized>
+                <div class="nav-item px-3">
+                    <NavLink class="nav-link" href="/Login">
+                        <span class="oi oi-account-login" aria-hidden="true"></span> Вход
+                    </NavLink>
+                </div>
+
+                <div class="nav-item px-3">
+                    <NavLink class="nav-link" href="/Register">
+                        <span class="oi oi-plus" aria-hidden="true"></span> Регистрация
+                    </NavLink>
+                </div>
+            </NotAuthorized>
+        </AuthorizeView>
+
+    </nav>
+</div>
+
+@code {
+    private bool collapseNavMenu = true;
+
+    private string? NavMenuCssClass => collapseNavMenu ? "collapse" : null;
+
+    private void ToggleNavMenu()
+    {
+        collapseNavMenu = !collapseNavMenu;
+    }
+    private ClaimsPrincipal userClaims;
+    private AuthenticationState authenticationState;
+
+    protected async Task LogOutMethod()
+    {
+        try
+        {
+            authenticationState = await authenticationStateProvider.GetAuthenticationStateAsync();
+            userClaims = authenticationState.User;
+            if (userClaims is not null && userClaims.Identity.IsAuthenticated)
+            {
+                logger.Log(LogLevel.Information, $"User {userClaims.Identity.Name} successfully logged out of the application.!");
+
+                userClaims = await identityManager.LogOutUserAsync(userClaims);
+                await authenticationStateProvider.RemoveClaimFromSessionStorageAsync();
+
+                navigationManager.NavigateTo("/", true); // Rerender the navigation menu!
+            }
+            else
+            {
+                errorModel.Code = "Logout";
+                errorModel.Description = "User came to this page but he/she is not logged in!";
+                logger.Log(LogLevel.Error, errorModel.Description);
+            }
+        }
+        catch (Exception ex) // Handle concrete exceptions first!
+        {
+            errorModel.Code = "DB";
+            errorModel.Description = ex.Message;
+            logger.Log(LogLevel.Error, ex.Message);
+        }
+
+        // await base.OnInitializedAsync();
+    }
+}

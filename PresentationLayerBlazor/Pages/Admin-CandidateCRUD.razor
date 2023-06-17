@@ -1,0 +1,169 @@
+﻿@page "/CRUDCandidate"
+@using BusinessLayer;
+@using ServiceLayer;
+@inject NavigationManager navManager;
+@inject IJSRuntime JsRuntime;
+
+<AuthorizeView Roles="Admin">
+    <Authorized>
+        <center>
+            <div style="background-color: white; width: 29em; text-align:center; padding:5px;margin:5px;">
+                <h3>Търсене на кандидат</h3>
+                <br />
+                <label style="background-color:white">Търси по ID от базата данни: </label> <input type="number" @bind-value="candidateID" />
+                <br /><br /><button class="outline" @onclick="Search">Търси</button> <button type="button" class="outline" @onclick="Create"> <big>Създай кандидат</big></button>
+
+            </div>
+        </center>
+        @if (candidate != null)
+        {
+            <br />
+             <center>
+            <div style="background-color: white; width: 29em; text-align:center; padding:5px;margin:5px;">
+            <EditForm Model="candidate" Context="CONTEXT" hidden="@hideForm">
+                        <h3>Промени кандидат</h3>
+
+                <h3 style="color:red">@errMess</h3>
+                <input placeholder="Име на кандидата" @bind-value="candidate.FirstName" required />
+                <br /><br /> <input placeholder="Презиме на кандидата" @bind-value="candidate.MidName" required />
+                <br /><br />  <input placeholder="Фамилия на кандидата" @bind-value="candidate.LastName" required />
+                <br /><br />
+                <select @bind="candidate.Region" required>
+                    @for (int i = 0; i < regions.Count; i++)
+                    {
+                        <option value="@i">
+                            @regions[i]
+                        </option>
+                    }
+                </select>
+                <br /><br />
+                <select id="1" @bind="partyID" required>
+                    @if (parties != null)
+                    {
+                        @foreach (var p in parties)
+                        {
+                            <option value="@p.ID">
+                                @p.Name
+                            </option>
+                        }
+                    }
+                </select>
+                        <br /><br /> <button type="button" class="outline green"  @onclick="Update">Обнови</button>
+                 <button type="button" class="outline red" @onclick="Delete">Изтрий</button>
+
+            </EditForm>
+                </div>
+            </center>
+        }
+    </Authorized>
+</AuthorizeView>
+
+@code {
+    int candidateID = 0;
+    bool hideForm = true;
+    int partyID;
+    int oldPartyID;
+    List<Party> parties;
+    string errMess = string.Empty;
+    List<string> regions = new List<string>() { "Благоевград", "Бургас", "Варна", "Велико Търново", "Видин", "Враца", "Габрово", "Кърджали", "Кюстендил", "Ловеч", "Монтана", "Пазарджик", "Перник", "Плевен", "Пловдив", "Разград", "Русе", "Силистра", "Сливен", "Смолян", "София – град", "София – окръг", "Стара Загора", "Добрич", "Търговище", "Хасково", "Шумен", "Ямбол", "Друг/Неизвестен" };
+    Candidate candidate;
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+
+            parties = await (new PartyManager(DBContextManager.CreateContext()).ReadAllAsync());
+        }
+        catch (Exception ex)
+        {
+            errMess = ex.Message;
+        }
+
+    }
+
+    private async Task Update()
+    {
+        try
+        {
+
+            oldPartyID = candidate.FK_Party.ID;
+
+            if (oldPartyID != partyID)
+            {
+
+                candidate.FK_Party = await new PartyManager(DBContextManager.CreateContext()).ReadAsync(partyID);
+
+                PartyManager pm = new PartyManager(DBContextManager.CreateContext());
+                Party party = await pm.ReadAsync(partyID, true);
+
+                party.Candidates.Add(candidate);
+                await pm.UpdateAsync(party);
+
+
+
+
+                parties = await (new PartyManager(DBContextManager.CreateContext()).ReadAllAsync());
+            }
+            CandidateManager cm = new CandidateManager(DBContextManager.CreateContext());
+
+            await cm.UpdateAsync(candidate);
+            candidate = null;
+            hideForm = true;
+
+            await OnInitializedAsync();
+        }
+        catch (Exception ex)
+        {
+            errMess = ex.Message;
+        }
+
+
+    }
+    private async Task Delete()
+    {
+        try
+        {
+            CandidateManager cm = new CandidateManager(DBContextManager.CreateContext());
+
+            await cm.DeleteAsync(candidate.ID);
+            candidate = null;
+            hideForm = true;
+
+            await OnInitializedAsync();
+
+        }
+        catch (Exception ex)
+        {
+            errMess = ex.Message;
+        }
+
+    }
+
+    private async Task Search()
+    {
+        try
+        {
+            candidate = await new CandidateManager(DBContextManager.CreateContext()).ReadAsync(candidateID, true);
+            if (candidate != null)
+            {
+                partyID = candidate.FK_Party.ID;
+                hideForm = false;
+            }
+            else
+            {
+                await JsRuntime.InvokeVoidAsync("alert", $"Не е намерен кандидат с ID: {candidateID}");
+
+            }                  
+
+        }
+        catch (Exception ex)
+        {
+            errMess = ex.Message;
+        }
+
+    }
+    private async Task Create()
+    {
+        navManager.NavigateTo("/CreateCandidate");
+    }
+}

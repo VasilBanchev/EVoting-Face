@@ -1,0 +1,142 @@
+﻿@page "/CreateParty"
+@using ServiceLayer;
+@using BusinessLayer;
+@inject IJSRuntime JsRuntime;
+@inject NavigationManager navManager;
+
+<AuthorizeView Roles="Admin">
+    <Authorized>
+        <center>
+        <EditForm Model="party" style="background-color: white; width: 35em; text-align:center; padding: 5px; margin: 5px;" Context="Context" OnValidSubmit="Create">
+            <h3>Създай партия</h3>
+
+            <input placeholder="Име на партията" @bind-value="party.Name" required />
+            <input placeholder="Име на лидера на партията" @bind-value="party.PartyLeader" required />
+           
+            <br /><br /><button class="outline" type="submit">Създай</button>
+        </EditForm>
+        </center>
+        <br />
+
+        <table width="100%" cellpadding="5" style="background-color: white; text-align:center">
+            <tr><td colspan="5"><h3>Списък и управление на партии</h3></td></tr>
+            <tr><td colspan="5">     <h4 style="color: @CurrentColor; text-align:center">@info</h4> </td></tr>
+            <tr>
+                <td>Име на партия</td>
+                <td>Име на лидер</td>
+                <td>Виж повече</td>
+                <td>Промени</td>
+                <td>Изтрий</td>
+            </tr>
+            @if (allParties.Count != 0)
+            {
+                foreach (var p in allParties)
+                {
+                    <tr>
+                        <td><input type="text" @bind-value="@p.Name" /></td>
+                        <td><input type="text" @bind-value="@p.PartyLeader" /></td>
+                        <td><button class="outline" @onclick=@(() => Read(p.ID))>Виж повече</button></td>
+                        <td><button class="outline green" @onclick="@(() => Update(p))">Промени</button></td>
+                        <td><button class="outline red" @onclick="@(() => Delete(p))">Изтрий</button></td>
+                        @* <button id="@teamDB.ID" @onclick="@(() => DeleteTeam(teamDB.ID))">Delete</button>*@
+                    </tr>
+                }
+            }
+        </table>
+
+    </Authorized>
+</AuthorizeView>
+
+<label id="error" class="col-md-4 text-danger">@errMess</label>
+@code {
+    string errMess = string.Empty;
+    private string CurrentColor { get; set; } = "black";
+    private string info = "";
+
+    Party party = new Party();
+    PartyManager pm = new PartyManager(DBContextManager.CreateContext());
+    List<Party> allParties = new List<Party>();
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            allParties = await pm.ReadAllAsync();
+
+
+        }
+        catch (Exception ex)
+        {
+            errMess = ex.Message;
+        }
+
+    }
+
+    private async Task Create()
+    {
+        try
+        {
+            // Party party = new Party(partyname, partyleader);
+            await pm.CreateAsync(party);
+            allParties.Add(party);
+            party = new Party();
+
+        }
+        catch (Exception ex)
+        {
+            errMess = ex.Message;
+        }
+
+
+
+    }
+
+    private void ChangeColor()
+    {
+        var random = new Random();
+        var color = String.Format("#{0:X6}", random.Next(0x1000000)); // Generate a random 6-digit hex color code.
+        CurrentColor = color;
+    }
+    private async Task Delete(Party party)
+    {
+        try
+        {
+            bool confirmed = await JsRuntime.InvokeAsync<bool>("confirm", "Сигурни ли сте че искате да изтриете партията и всички кандидати към нея?");
+            if (confirmed)
+            {
+
+                await pm.DeleteAsync(party.ID);
+                allParties.Remove(party);
+                ChangeColor();
+                info = $"Партия {party.Name} е изтрита успешно!";
+            }
+
+        }
+        catch (Exception ex)
+        {
+            errMess = ex.Message;
+        }
+
+
+    }
+    private async Task Update(Party party)
+    {
+        try
+        {
+            ChangeColor();
+            info = $"Партия {party.Name} е променена успешно!";
+            await pm.UpdateAsync(party);
+
+        }
+        catch (Exception ex)
+        {
+            errMess = ex.Message;
+        }
+
+
+
+    }
+    private async Task Read(int id)
+    {
+        navManager.NavigateTo($"/ReadParty/{id}");
+    }
+}

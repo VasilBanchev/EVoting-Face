@@ -1,0 +1,324 @@
+﻿@page "/Vote/{idElection:int}"
+@using BusinessLayer;
+@using ServiceLayer;
+@using System.Security.Claims;
+@using Microsoft.AspNetCore.Identity
+@inject UserManager<User> userManager
+@inject IdentityManager identityManager;
+
+@inject AuthenticationStateProvider GetAuthenticationStateAsync
+<AuthorizeView Roles="User">
+    
+@if (currUser != null)
+{
+
+    @if (currUser.EligibleForVoting)
+    {
+        @if (currUser.ElectionsVoted.FirstOrDefault(e => e.ID == idElection) == null)
+        {
+            @if (election != null)
+            {
+            <table width="100%" cellpadding="5" style="background-color: white;  align-items: center; text-align:center" hidden="@tableHidden">
+                
+                    @if (election.Dateto.CompareTo(DateTime.Now) > 0 && election.DateFrom.CompareTo(DateTime.Now)<0)
+                    {
+                    <tr><td colspan="3"><h3>@election.Question.Text</h3></td></tr>
+                    if (election.Type != 4)
+                    {
+                        for (int i = 0; i < answers.Count(); i += 3)
+                        {
+                            <tr>
+                                <td width="33%"><h4>@answers[i].PartyName<input value="@answers[i].PartyName" type="radio" @oninput="RadioOptChanged" style="width: 0.6em; height: 0.6em" name="party"></h4></td>
+
+                                @if (@answers.Count > i + 1)
+                                {
+                                    <td width="33%"><h4>@answers[i+1].PartyName <input value="@answers[i+1].PartyName" type="radio" @oninput="RadioOptChanged" style="width: 0.6em; height: 0.6em" name="party"></h4></td>
+
+                                }
+                                @if (@answers.Count > i + 2)
+                                {
+                                    <td width="33%">
+                                        <h4>@answers[i+2].PartyName <input value="@answers[i+2].PartyName" type="radio" @oninput="RadioOptChanged" style="width: 0.6em; height: 0.6em" name="party"></h4>
+                                    </td>
+
+                                }
+                            </tr>
+                        }
+                        <tr>
+                            <td colspan="3"><h4 style="color: red; text-align:center" >@errMess</h4></td>
+                        </tr>
+                        <tr>
+                            <td colspan="3">
+                                        <button type="submit" class="outline green" @onclick="NextForm" disabled="@disabledNextButt">Напред</button>
+                            </td>
+                        </tr>
+                    }
+                    else
+                    {
+                        <tr style="background-color:white">
+                            <td width="33%"> <h3>@answers[0].Text  <input type="radio" name="ref" value="@answers[0].ID" style="width:0.65em; height:0.65em" @oninput="RefChanged"> </h3></td>
+                            <td width="34%"> <h3>@answers[1].Text  <input type="radio" name="ref" value="@answers[1].ID" style="width:0.65em; height:0.65em" @oninput="RefChanged"> </h3></td>
+                            <td width="33%"> <h3>@answers[2].Text  <input type="radio" name="ref" value="@answers[2].ID" style="width:0.65em; height:0.65em" @oninput="RefChanged"> </h3></td>
+                        </tr>
+                        <tr>
+                            <td colspan="3"> <button type="button" class="outline green" @onclick="RefVote" disabled="@disabledRefButt">Гласувай</button></td>
+                        </tr>
+                    }
+
+
+                }
+            </table>
+            <table width="100%" cellpadding="5" style="background-color: white;  align-items: center; text-align:center" hidden="@(!tableHidden)">
+                @if (selectedPartyCan != null && selectedPartyCan.Count != 0)
+                {
+                    <tr><td colspan="3">@selectedPartyCan[0].PartyName</td></tr>
+                    for (int i = 0; i < selectedPartyCan.Count; i += 3)
+                    {
+                        <tr>
+                            @if (i == 0)
+                            {
+                                <td width="33%"><h4>@selectedPartyCan[i].Text <input value="@selectedPartyCan[i].ID" type="radio" @oninput="CandidateChanged" style="width: 0.6em; height: 0.6em" name="candidatesRad" checked></h4></td>
+
+                            }else
+                            {
+                                <td width="33%"><h4>@selectedPartyCan[i].Text<input value="@selectedPartyCan[i].ID" type="radio" @oninput="CandidateChanged" style="width: 0.6em; height: 0.6em" name="candidatesRad"></h4></td>
+
+                            }
+
+                            @if (selectedPartyCan.Count > i + 1)
+                            {
+                                <td width="33%"><h4>@selectedPartyCan[i+1].Text<input value="@selectedPartyCan[i+1].ID" type="radio" @oninput="CandidateChanged" style="width: 0.6em; height: 0.6em" name="candidatesRad"></h4></td>
+
+                            }
+                            @if (selectedPartyCan.Count > i + 2)
+                            {
+                                <td width="33%"><h4>@selectedPartyCan[i+2].Text <input value="@selectedPartyCan[i+2].ID" type="radio" @oninput="CandidateChanged" style="width: 0.6em; height: 0.6em" name="candidatesRad"></h4></td>
+                            }
+                        </tr>
+                    }
+                    <tr>
+                        <td>
+                            <button type="button" class="outline red" @onclick="PrevForm">Назад</button>
+                        </td>
+                        <td>
+
+                        </td>
+                        <td>
+                            <button type="button" class="outline green" @onclick="SubmitVote">Гласувай</button>
+                        </td>
+                    </tr>
+                }
+            </table>
+            }
+        }
+        else
+        {
+                <h1 style="text-align:center;  background-color: rgba(255, 255, 255, 0.7); padding: 10px;   color: black;"> Вече сте гласували на тези избори</h1>
+        }
+    }
+    else
+    {
+        <h3>Нямате навършени години за да гласувате</h3>
+    }
+    <h2></h2>
+}
+</AuthorizeView>
+@code {
+    [Parameter]
+    public int idElection { get; set; }
+    Election election;
+    ElectionManager em = new ElectionManager(DBContextManager.CreateContext());
+    User currUser;
+    List<Answer> answers = new List<Answer>();
+
+    [CascadingParameter]
+    private Task<AuthenticationState> authenticationStateTask { get; set; }
+    string partyName = string.Empty;
+    bool tableHidden = false;
+    string currentUserId = string.Empty;
+    int selectedAnsID = -1;
+    bool disabledNextButt = true;
+    bool disabledRefButt = true;
+
+    string errMess = string.Empty;
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+
+            var user = (await authenticationStateTask).User;
+
+            if (user.Identity.IsAuthenticated)
+            {
+                var currentUser = await userManager.GetUserAsync(user);
+                currentUserId = currentUser.Id;
+
+            }
+            currUser = await identityManager.ReadUserAsync(currentUserId, true);
+
+            if (currUser.EligibleForVoting == false && DateTime.Now.CompareTo(currUser.FK_IDCard.DateOfBirth.AddYears(18)) >=0 ) // проверка за навършени 18 години 
+            {
+                currUser.EligibleForVoting = true;
+                await identityManager.UpdateUserAsync(currUser, true);
+            }
+
+            election = await em.ReadAsync(idElection, true);
+            answers = election.Question.Answers;
+
+            if (election.Type != 4 && election.Type != 3)
+            {
+                answers = answers.OrderBy(a => a.PartyName).ToList();
+                answers = answers.DistinctBy(a => a.PartyName).ToList();
+
+            }
+            if (election.Type == 3)
+            {
+                answers = answers.Where(a => a.Region == currUser.FK_IDCard.Region).ToList();
+                answers = answers.OrderBy(a => a.PartyName).ToList();
+
+                if (answers.Count == 0)
+                {
+                    errMess = $"Няма кандидати, които да участват в изборите във вашата област: {currUser.FK_IDCard.RegionText}";
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            errMess = ex.Message;
+        }
+
+
+
+    }
+    List<Answer> selectedPartyCan;
+    private async Task NextForm()
+    {
+        try
+        {
+
+            tableHidden = true;
+            if (partyName == string.Empty)
+            {
+                partyName = answers[0].PartyName;
+            }
+            if (election.Type  == 3)
+            {
+                selectedPartyCan = election.Question.Answers.Where(a => a.PartyName == partyName && a.Region == currUser.FK_IDCard.Region).ToList();
+            }
+            else
+            {
+                selectedPartyCan = election.Question.Answers.Where(a => a.PartyName == partyName).ToList();
+            } 
+
+            if (selectedPartyCan.Count != 0)
+            {
+                selectedAnsID = selectedPartyCan[0].ID;
+            }
+
+        }
+        catch (Exception ex)
+        {
+            errMess = ex.Message;
+        }
+
+    }
+    private void RadioOptChanged(ChangeEventArgs e)
+    {
+        partyName = e.Value.ToString();
+        disabledNextButt = false;
+
+    }
+    private async Task CandidateChanged(ChangeEventArgs e)
+    {
+        try
+        {
+
+            selectedAnsID = (await (new AnswerManager(DBContextManager.CreateContext()).ReadAsync(int.Parse(e.Value.ToString()), true))).ID;
+
+        }
+        catch (Exception ex)
+        {
+            errMess = ex.Message;
+        }
+
+    }
+    private async Task PrevForm()
+    {
+        tableHidden = false;
+    }
+    private async Task SubmitVote()
+    {
+        try
+        {
+            await UserUpdate();
+
+            AnswerManager am = new AnswerManager(DBContextManager.CreateContext());
+            await am.VoteIncrement(selectedAnsID);
+
+        }
+        catch (Exception ex)
+        {
+            errMess = ex.Message;
+        }
+
+
+    }
+    int refAnsID = -1;
+    private async Task RefChanged(ChangeEventArgs e)
+    {
+        try
+        {
+            AnswerManager am = new AnswerManager(DBContextManager.CreateContext());
+
+            refAnsID = int.Parse(e.Value.ToString());
+
+            disabledRefButt = false;
+
+        }
+        catch (Exception ex)
+        {
+            errMess = ex.Message;
+        }
+
+
+    }
+
+    private async Task RefVote()
+    {
+        try
+        {
+
+            if (refAnsID == -1)
+            {
+                refAnsID = answers[0].ID;
+            }
+
+            await UserUpdate();
+
+            AnswerManager am = new AnswerManager(DBContextManager.CreateContext());
+            await am.VoteIncrement(refAnsID);
+        }
+        catch (Exception ex)
+        {
+            errMess = ex.Message;
+        }
+
+
+
+    }
+    private async Task UserUpdate()
+    {
+        try
+        {
+
+            currUser.ElectionsVoted.Add(await em.ReadAsync(idElection, true));
+            await identityManager.UpdateUserAsync(currUser, true);
+
+        }
+        catch (Exception ex)
+        {
+            errMess = ex.Message;
+        }
+
+    }
+}

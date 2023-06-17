@@ -1,0 +1,123 @@
+﻿@page "/cameracapture"
+@using System.Diagnostics;
+@using System.Text;
+@inject IJSRuntime JSRuntime
+
+<canvas id="canvas" width="640" height="480" style="display:none;"></canvas>
+<video id="video" width="640" height="480" autoplay></video>
+<button @onclick="CapturePhoto">Снимай</button>
+<button id="retakeButton" @onclick="RetakePhoto" style="display:none;">Retake Photo</button>
+
+<h4>@res</h4>
+@code {
+    string res = "Направете снимка";
+    private async Task CapturePhoto()
+    {
+        try
+        {
+            var imageDataUrl = await JSRuntime.InvokeAsync<string>("capturePhoto");
+            var base64Data = imageDataUrl.Substring(imageDataUrl.IndexOf(',') + 1);
+            var photoBytes = Convert.FromBase64String(base64Data);
+
+            await JSRuntime.InvokeVoidAsync("stopCamera");
+            await JSRuntime.InvokeVoidAsync("setElementStyle", "video", "display", "none");
+            await JSRuntime.InvokeVoidAsync("setElementStyle", "retakeButton", "display", "block");
+
+            await AI(photoBytes);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error capturing photo: {ex.Message}");
+        }
+    }
+
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            await JSRuntime.InvokeVoidAsync("initializeCameraInterop");
+        }
+    }
+    private async Task RetakePhoto()
+    {
+        await JSRuntime.InvokeVoidAsync("setElementStyle", "video", "display", "block");
+        await JSRuntime.InvokeVoidAsync("setElementStyle", "canvas", "display", "none");
+        await JSRuntime.InvokeVoidAsync("setElementStyle", "retakeButton", "display", "none");
+        await JSRuntime.InvokeVoidAsync("initializeCameraInterop");
+    }
+
+
+    private async Task AI(byte[] capturedimage)
+    {
+        string pythonScript = @"
+import sys
+import base64
+import numpy as np
+import face_recognition
+from io import BytesIO
+from PIL import Image
+
+def compare_faces(image1_bytes, image2_bytes):
+    image1 = np.array(Image.open(BytesIO(image1_bytes)))
+    image2 = np.array(Image.open(BytesIO(image2_bytes)))
+
+    image1_encodings = face_recognition.face_encodings(image1)
+    image2_encodings = face_recognition.face_encodings(image2)
+
+    if len(image1_encodings) == 0 or len(image2_encodings) == 0:
+        return 'No faces found in one or both images.'
+
+    match = face_recognition.compare_faces(image1_encodings, image2_encodings[0], tolerance=0.5)
+
+    if match[0]:
+        return 'The faces in the images are the same person.'
+    else:
+        return 'The faces in the images are NOT the same person.'
+
+if __name__ == '__main__':
+    image1_base64 = sys.stdin.readline().strip()
+    image2_base64 = sys.stdin.readline().strip()
+
+    image1_bytes = base64.b64decode(image1_base64)
+    image2_bytes = base64.b64decode(image2_base64)
+
+    result = compare_faces(image1_bytes, image2_bytes)
+    print(result)
+";
+
+      
+        string image2Path = @"C:\Users\35987\Documents\ViberDownloads\0-02-05-d0d2eff17bb330bdb64f7d14d9f91ab4be095262eeaf9f1b0ead1df8fc191d93_9fc1e764b1d886d2.jpg";
+
+        var processInfo = new ProcessStartInfo
+            {
+                FileName = "python",
+                RedirectStandardInput = true,
+                RedirectStandardOutput = true,
+                UseShellExecute = false,
+                CreateNoWindow = true,
+                Arguments = "-c \"" + pythonScript + "\"",
+            };
+
+        using (var process = new Process { StartInfo = processInfo })
+        {
+            process.Start();
+
+            using (var streamWriter = new StreamWriter(process.StandardInput.BaseStream, Encoding.ASCII))
+            {
+                byte[] image2Bytes = File.ReadAllBytes(image2Path);
+
+                string image1Base64 = Convert.ToBase64String(capturedimage);
+                string image2Base64 = Convert.ToBase64String(image2Bytes);
+
+                streamWriter.WriteLine(image1Base64);
+                streamWriter.WriteLine(image2Base64);
+            }
+
+            string result = process.StandardOutput.ReadLine();
+            res = result;
+            process.WaitForExit();
+        }
+    }
+}
+

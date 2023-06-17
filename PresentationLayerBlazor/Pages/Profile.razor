@@ -1,0 +1,237 @@
+﻿@page "/Profile"
+@using BusinessLayer;
+@using ServiceLayer;
+@using System.Security.Claims;
+@using Microsoft.AspNetCore.Identity
+@inject UserManager<User> userManager
+@inject IdentityManager identityManager;
+@inject AuthenticationStateProvider GetAuthenticationStateAsync
+@inject IJSRuntime JsRuntime;
+<AuthorizeView Roles="User">
+    
+@if (currUser != null)
+{
+<EditForm Model="@currUser" Context="CONTEXT" OnSubmit="@ChangePassword">
+	<div class="form-box">
+		<div class="header-text">
+			<h3>Профил</h3>
+			<h5>Можете да смените само паролата си</h5>
+				</div>
+		<label><big>Име</big></label> <br/>
+		<InputText id="name" class="form-control" @bind-Value="currUser.FK_IDCard.Name " disabled/>
+				<label><big>Презиме</big></label> <br />
+
+		<InputText id="name" class="form-control" @bind-Value="currUser.FK_IDCard.MidName " disabled />
+				<label><big>Фамилия</big></label> <br/>
+
+		<InputText id="name" class="form-control" @bind-Value="currUser.FK_IDCard.LastName " disabled />
+				<label><big>Родно място</big></label> <br />
+
+		<InputText id="name" class="form-control" @bind-Value="currUser.FK_IDCard.BornPlace " disabled />
+				<label><big>Местоживеене</big></label> <br/>
+
+		<InputText id="name" class="form-control" @bind-Value="currUser.FK_IDCard.RegionText " disabled />
+
+				<label><big>Променете парола /не е задължително/</big></label> <br />
+
+		<InputText class="form-control" placeholder="Парола" id="password" type="password" @bind-Value="passwordChange" />
+		<button type="submit" class="btn border-dark mt-2 ml-3">Промени парола</button>
+
+
+
+	</div>
+</EditForm>
+}
+	<label id="error" class="col-md-4 text-danger">@errMess</label>
+
+</AuthorizeView>
+@code {
+	string errMess = string.Empty;
+	string passwordChange = string.Empty;
+
+
+	User currUser;
+	[CascadingParameter]
+	private Task<AuthenticationState> authenticationStateTask { get; set; }
+	string currentUserId = string.Empty;
+
+
+	protected override async Task OnInitializedAsync()
+	{
+		try
+		{
+			var user = (await authenticationStateTask).User;
+
+			if (user.Identity.IsAuthenticated)
+			{
+				var currentUser = await userManager.GetUserAsync(user);
+				currentUserId = currentUser.Id;
+
+			}
+			currUser = await identityManager.ReadUserAsync(currentUserId, true);
+		}
+		catch (Exception ex)
+		{
+			errMess = ex.Message;
+		}
+
+	}
+	private async Task ChangePassword()
+	{
+		try
+		{
+			
+			if (passwordChange.Length >= 6)
+			{
+				currUser.PasswordHash = passwordChange;
+			}
+			await identityManager.ChangePassword(currentUserId, passwordChange);
+			await JsRuntime.InvokeVoidAsync("alert", $"Успешно променена парола");
+			passwordChange = string.Empty;
+
+		}
+		catch (Exception ex)
+		{
+			errMess = ex.Message;
+		}
+	}
+}
+
+<style>
+/*	* {
+		box-sizing: border-box;
+	}
+
+	body {
+		font-family: poppins;
+		font-size: 16px;
+		color: #fff;
+	}
+
+	.form-box {
+		background-color: rgba(0, 0, 0, 0.5);
+		margin: auto auto;
+		padding: 20px;
+		border-radius: 5px;
+		box-shadow: 0 0 10px #000;
+		position: absolute;
+		top: 0;
+		bottom: 0;
+		left: 0;
+		right: 0;
+		width: 30em;
+		height: 35em;
+	}
+
+		.form-box:before {
+			width: 100%;
+			height: 35em;
+			background-size: cover;
+			content: "";
+			position: fixed;
+			left: 0;
+			right: 0;
+			top: 0;
+			bottom: 0;
+			z-index: -1;
+			display: block;
+			filter: blur(2px);
+		}
+
+		.form-box .header-text {
+			font-size: 32px;
+			font-weight: 600;
+			padding-bottom: 30px;
+			text-align: center;
+		}*/
+	* {
+		box-sizing: border-box;
+	}
+
+	body {
+		font-family: poppins;
+		font-size: 16px;
+		color: #fff;
+	}
+
+	.form-box {
+		background-color: rgba(0, 0, 0, 0.55);
+		margin: auto auto;
+		padding: 10px;
+		border-radius: 5px;
+		box-shadow: 0 0 12px #000;
+		position: center;
+		top: 0;
+		bottom: 0;
+		left: 0;
+		right: 0;
+		width: 40%;
+		height: auto;
+	}
+
+		.form-box:before {
+			width: 100%;
+			height: 100%;
+			background-size: cover;
+			content: "";
+			position: fixed;
+			left: 0;
+			right: 0;
+			top: 0;
+			bottom: 0;
+			z-index: -1;
+			display: block;
+			filter: blur(2px);
+		}
+
+		.form-box .header-text {
+			font-size: 32px;
+			font-weight: 600;
+			padding-bottom: 10px;
+			text-align: center;
+		}
+		.form-box input {
+			margin: 6px 0px;
+			border: none;
+			padding: 10px;
+			border-radius: 5px;
+			width: 100%;
+			font-size: 18px;
+			font-family: poppins;
+		}
+
+			.form-box input[type=checkbox] {
+				display: none;
+			}
+
+	
+
+		.form-box input[type=checkbox]:checked + label:before {
+			content: "\2713";
+			font-size: 20px;
+			color: #000;
+			text-align: center;
+			line-height: 20px;
+		}
+
+		.form-box span {
+			font-size: 14px;
+		}
+
+		.form-box button {
+			background-color: #2828aa;
+			color: #fff;
+			border: none;
+			border-radius: 5px;
+			cursor: pointer;
+			width: 100%;
+			font-size: 18px;
+			padding: 10px;
+			margin: 20px 0px;
+		}
+
+	span a {
+		color: #BBB;
+	}
+
+</style>

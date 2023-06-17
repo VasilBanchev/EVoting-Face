@@ -1,0 +1,103 @@
+﻿@page "/CreateCandidate"
+@using BusinessLayer;
+@using ServiceLayer;
+
+<AuthorizeView Roles="Admin">
+    <Authorized>
+<center>
+<EditForm Model="candidate" Context="CONTEXT" style="background-color:white; width:20em; text-align:center;" OnValidSubmit="Create">
+            <h3>Създай кандидат</h3>
+
+     <h3 style="color:red">@errMess</h3>
+    <input placeholder="Име на кандидата" @bind-value="candidate.FirstName" required/>
+    <br /><br /> <input placeholder="Презиме на кандидата" @bind-value="candidate.MidName" required />
+    <br /><br />  <input placeholder="Фамилия на кандидата" @bind-value="candidate.LastName"  required/>
+    <br /><br /> <select @bind="candidate.Region" required>
+        @for (int i = 0; i < regions.Count; i++)
+        {
+            <option value="@i">
+                @regions[i]
+            </option>
+        }
+    </select>
+    <br /><br />  <select id="1" @bind="partyID" required>
+        @if (parties != null)
+        {
+            @foreach (var p in parties)
+            {
+                <option value="@p.ID">
+                    @p.Name
+                </option>
+            }
+        }
+    </select>
+    <br /><br /> 
+  
+                <button type="submit" class="outline" @onsubmit="Create">Създай</button>
+
+<br /><br>
+
+ </EditForm>
+ </center>
+ </Authorized>
+</AuthorizeView>
+@code {
+    string name = string.Empty;
+    string midname = string.Empty;
+    string lastname = string.Empty;
+    int region;
+    int partyID;
+    /*  Party party;*/
+    List<Party> parties;
+    string errMess = string.Empty;
+    List<string> regions = new List<string>(){ "Благоевград", "Бургас", "Варна", "Велико Търново", "Видин", "Враца", "Габрово", "Кърджали", "Кюстендил", "Ловеч", "Монтана", "Пазарджик", "Перник", "Плевен", "Пловдив", "Разград", "Русе", "Силистра", "Сливен", "Смолян", "София – град", "София – окръг", "Стара Загора", "Добрич", "Търговище", "Хасково", "Шумен", "Ямбол", "Друг/Неизвестен" };
+    Candidate candidate = new Candidate();
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+parties = await (new PartyManager(DBContextManager.CreateContext()).ReadAllAsync());
+        if (parties.Count != 0)
+        {
+            partyID = parties.First().ID;
+
+        }
+        else
+        {
+            errMess = "Първо добавете партии";
+        }
+
+        }
+        catch (Exception ex)
+        {
+            errMess = ex.Message;
+        }
+
+        
+    }
+
+    private async Task Create()
+    {
+        try
+        {
+ candidate.FK_Party = await new PartyManager(DBContextManager.CreateContext()).ReadAsync(partyID);
+
+        CandidateManager cm = new CandidateManager(DBContextManager.CreateContext());
+        PartyManager pm = new PartyManager(DBContextManager.CreateContext());
+        Party party = await pm.ReadAsync(partyID);
+
+        party.Candidates.Add(candidate);
+        await pm.UpdateAsync(party);
+        candidate = new Candidate();
+        parties = await (new PartyManager(DBContextManager.CreateContext()).ReadAllAsync());
+       await OnInitializedAsync();
+
+        }
+        catch (Exception ex)
+        {
+            errMess = ex.Message;
+        }
+
+       
+    }
+}
